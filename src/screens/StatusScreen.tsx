@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SOS_STEPS, SosStatus, formatTime, useSession } from '../session';
 import { colors, Page, styles } from '../components/UI';
 import { FadeIn } from '../components/Motion';
+import { SUPPLY_OPTIONS } from '../types/supply';
 
 function Timeline({ status }: { status: SosStatus }) {
   const idx = SOS_STEPS.indexOf(status);
@@ -30,11 +31,12 @@ function Timeline({ status }: { status: SosStatus }) {
 }
 
 export default function StatusScreen() {
-  const { sos, reports, safeAt } = useSession();
+  const { sos, reports, supplies, safeAt } = useSession();
 
   const notes = [
     ...sos.map((r) => ({ t: r.createdAt, icon: 'alert-circle-outline' as const, text: `${r.id} is now ${r.status.toLowerCase()}.` })),
     ...reports.map((r) => ({ t: r.createdAt, icon: 'document-text-outline' as const, text: `${r.id} ${r.status.toLowerCase()}.` })),
+    ...supplies.map((r) => ({ t: r.created_at, icon: 'cube-outline' as const, text: `${r.id} supply request saved (demo).` })),
     { t: new Date().toISOString(), icon: 'notifications-outline' as const, text: 'Apalit River water level rising. Avoid river banks.' },
   ];
 
@@ -42,7 +44,7 @@ export default function StatusScreen() {
     <Page edges={['top']}>
       <FadeIn>
         <Text style={styles.title}>My status</Text>
-        <Text style={styles.subtitle}>Your rescue requests, reports and notifications.</Text>
+        <Text style={styles.subtitle}>Your rescue requests, supplies, reports and notifications.</Text>
       </FadeIn>
 
       <FadeIn delay={60} style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
@@ -68,10 +70,44 @@ export default function StatusScreen() {
                 <Text style={{ color: colors.danger, fontWeight: '800', fontSize: 11 }}>{r.priority}</Text>
               </View>
             </View>
+            {r.peopleCount !== undefined && (
+              <View style={{ gap: 6 }}>
+                <Text style={styles.rowTitle}>{r.peopleCount} {r.peopleCount === 1 ? 'person needs' : 'people need'} help</Text>
+                {r.vulnerable.length > 0 && <Text style={styles.small}>Extra care: {r.vulnerable.join(', ')}</Text>}
+                <Text style={styles.subtitle}>{r.details.join(' · ')}</Text>
+              </View>
+            )}
             <Timeline status={r.status} />
           </FadeIn>
         ))
       )}
+
+      <Text style={styles.label}>Supply requests</Text>
+      {supplies.length === 0 ? (
+        <View style={styles.card}><Text style={styles.subtitle}>No supply requests yet. Use Request Supplies in the Report tab.</Text></View>
+      ) : supplies.map((request) => (
+        <FadeIn key={request.id} style={[styles.card, { gap: 10 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons name="cube-outline" size={25} color={colors.teal} />
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={styles.rowTitle}>Household supply request</Text>
+              <Text style={styles.small}>{formatTime(request.created_at)}</Text>
+            </View>
+            <View style={{ backgroundColor: '#E7F4F1', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6 }}>
+              <Text style={{ color: colors.teal, fontWeight: '700', fontSize: 11 }}>Awaiting supplies</Text>
+            </View>
+          </View>
+          <Text style={styles.subtitle}>{SUPPLY_OPTIONS.filter((option) => request[option.key]).map((option) => option.label).join(' · ') || 'Other supplies'}</Text>
+          {!!request.other_supplies && <Text style={styles.subtitle}>{request.other_supplies}</Text>}
+          <Text style={styles.small}>Children: {request.childrens} · Elderly: {request.elderly} · PWD: {request.pwd} · Adults: {request.adults}</Text>
+          <Text style={styles.small}>Flood: {request.flood_level.replace(/_/g, ' ')} · Medical assistance: {request.medical_assistance ? 'Yes' : 'No'}</Text>
+          <Text style={styles.subtitle}>{request.address} · {request.barangay}</Text>
+          <Text style={styles.small}>Contact: {request.contact_number}</Text>
+          <Text style={styles.small}>Location: {request.location.latitude.toFixed(5)}, {request.location.longitude.toFixed(5)}</Text>
+          <Text style={styles.small}>{request.evidence ? 'Photo evidence attached · ' : ''}No deliverer assigned · Demo request</Text>
+          <Text selectable style={styles.small}>{request.id}</Text>
+        </FadeIn>
+      ))}
 
       <Text style={styles.label}>Submitted reports</Text>
       {reports.length === 0 ? (
