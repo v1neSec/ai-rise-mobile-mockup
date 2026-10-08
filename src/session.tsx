@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import type { SupplyRequest, SupplyRequestDetails } from './types/supply';
 
 export type Role = 'resident' | 'volunteer';
 export type Session = { role: Role; name: string };
@@ -21,6 +22,7 @@ export type SosRequest = {
   id: string;
   createdAt: string;
   nature: string;
+  peopleCount?: number;
   details: string[];
   vulnerable: string[];
   priority: 'Medium' | 'High' | 'Critical';
@@ -116,6 +118,8 @@ type Ctx = {
   addSos: (r: Omit<SosRequest, 'id' | 'createdAt' | 'status'>) => SosRequest;
   reports: CommunityReport[];
   addReport: (r: Omit<CommunityReport, 'id' | 'createdAt' | 'status'>) => void;
+  supplies: SupplyRequest[];
+  addSupplyRequest: (r: SupplyRequestDetails) => SupplyRequest;
 
   // Volunteer
   volunteerOnline: boolean;
@@ -137,6 +141,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [safeAt, setSafeAt] = useState<string | null>(null);
   const [sos, setSos] = useState<SosRequest[]>([]);
   const [reports, setReports] = useState<CommunityReport[]>([]);
+  const [supplies, setSupplies] = useState<SupplyRequest[]>([]);
 
   const [volunteerOnline, setVolunteerOnline] = useState(true);
   const [requests, setRequests] = useState<Deployment[]>(SEED_REQUESTS);
@@ -189,6 +194,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
+  function addSupplyRequest(details: SupplyRequestDetails): SupplyRequest {
+    const request: SupplyRequest = {
+      ...details,
+      id: `SUP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      user: session?.name ?? null,
+      status: 'need_supplies',
+      deliverer: null,
+      created_at: new Date().toISOString(),
+      delivered_at: null,
+    };
+    setSupplies((list) => [request, ...list]);
+    return request;
+  }
+
   /* ---------- Volunteer actions ---------- */
   function acceptRequest(id: string) {
     if (active) return;
@@ -233,6 +252,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         addSos,
         reports,
         addReport,
+        supplies,
+        addSupplyRequest,
         volunteerOnline,
         setVolunteerOnline,
         requests,
