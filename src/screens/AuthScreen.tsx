@@ -284,7 +284,7 @@ export default function AuthScreen({ route, navigation }: Props) {
         </View>
 
         <Text style={[styles.title, { fontSize: 27 }]}>
-          {volunteer ? "Volunteer access" : "Welcome to AI-Rise"}
+          {volunteer ? "Volunteer access" : "Welcome to Agap-AI"}
         </Text>
 
         <Text style={[styles.subtitle, { textAlign: "center" }]}>
@@ -606,7 +606,7 @@ export default function AuthScreen({ route, navigation }: Props) {
         <Text style={{ color: accent, textAlign: "center", fontWeight: "600" }}>
           {registering
             ? "Already have an account? Sign in"
-            : "New to AI-Rise? Create an account"}
+            : "New to Agap-AI? Create an account"}
         </Text>
       </Pressable>
 

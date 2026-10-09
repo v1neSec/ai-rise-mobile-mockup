@@ -22,7 +22,7 @@ export function HomeHeader({ onProfile, onUpdates, role }: { onProfile: () => vo
   return <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
     <ChromeIcon icon="person-outline" label="Open profile" onPress={onProfile} />
     <View style={{ alignItems: 'center', gap: 1 }}>
-      <Text style={{ fontSize: 24, lineHeight: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.8 }}>AI-Rise</Text>
+      <Text style={{ fontSize: 24, lineHeight: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.8 }}>Agap-AI</Text>
       <Text style={{ fontSize: 11, lineHeight: 15, color: colors.muted }}>{role} support</Text>
     </View>
     <ChromeIcon icon="notifications-outline" label="Open updates" onPress={onUpdates} />

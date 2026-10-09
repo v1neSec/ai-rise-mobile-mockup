@@ -43,7 +43,7 @@ export default function WelcomeScreen({ navigation }: Props) {
           <Ionicons name="pulse" size={38} color={colors.blue} />
         </View>
 
-        <Text style={styles.title}>AI-Rise</Text>
+        <Text style={styles.title}>Agap-AI</Text>
         <Text style={[styles.subtitle, { textAlign: 'center' }]}>
           Together, prepared for what comes next.
         </Text>
@@ -64,7 +64,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         </Text>
       </View> */}
 
-      <Text style={styles.label}>HOW WILL YOU USE AI-RISE?</Text>
+      <Text style={styles.label}>HOW WILL YOU USE Agap-AI?</Text>
 
       {roles.map((item) => (
         <Pressable
