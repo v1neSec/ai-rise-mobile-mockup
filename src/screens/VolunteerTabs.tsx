@@ -25,7 +25,7 @@ export default function VolunteerTabs({ navigation }: Props) {
     return (
       <Page>
         <Text style={styles.title}>Volunteer sign-in required</Text>
-        <Action label="Sign in" color={colors.teal} onPress={() => navigation.replace('Auth', { role: 'volunteer' })} />
+        <Action label="Sign in" color={colors.blue} onPress={() => navigation.replace('Auth', { role: 'volunteer' })} />
       </Page>
     );
   }
@@ -34,10 +34,10 @@ export default function VolunteerTabs({ navigation }: Props) {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: colors.teal,
-        tabBarInactiveTintColor: '#6B7A90',
+        tabBarActiveTintColor: colors.blue,
+        tabBarInactiveTintColor: '#8A98AD',
         tabBarStyle: { backgroundColor: '#FFFFFF', borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
         tabBarIcon: ({ color, size, focused }) => (
           <Ionicons name={icons[route.name][focused ? 0 : 1]} size={size} color={color} />
         ),
@@ -49,7 +49,7 @@ export default function VolunteerTabs({ navigation }: Props) {
         component={VolunteerDeployment}
         options={{
           tabBarBadge: active ? 1 : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.teal, color: '#FFFFFF' },
+          tabBarBadgeStyle: { backgroundColor: colors.blue, color: '#FFFFFF' },
         }}
       />
     </Tab.Navigator>

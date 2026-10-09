@@ -1,5 +1,5 @@
 import React, { ComponentProps, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, PanResponder, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, space } from './UI';
 import { Press, Rings } from './Motion';
@@ -8,8 +8,8 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /* Volunteer-only tints. */
 export const vt = {
-  tealSoft: '#E5F4F2',
-  tealBorder: '#B9E0DB',
+  blueSoft: '#EDF3FF',
+  blueBorder: '#D8E4F5',
   criticalSoft: '#FDECEA',
   criticalBorder: '#F4C7C3',
   highSoft: '#FFF3E0',
@@ -18,6 +18,62 @@ export const vt = {
   mediumSoft: '#E8F0FD',
   mediumBorder: '#C9DAF7',
 };
+
+export const volunteerCard = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderColor: vt.blueBorder,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 18,
+    gap: 16,
+  },
+}).card;
+
+export function VolunteerHeader({ title, subtitle, action }: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={{ color: colors.blue, fontSize: 11, lineHeight: 16, fontWeight: '800', letterSpacing: 1 }}>VOLUNTEER SUPPORT</Text>
+        <Text style={{ color: colors.text, fontSize: 24, lineHeight: 30, fontWeight: '800' }}>{title}</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>{subtitle}</Text>
+      </View>
+      {action}
+    </View>
+  );
+}
+
+export function VolunteerAction({ label, onPress, secondary = false, icon }: {
+  label: string;
+  onPress: () => void;
+  secondary?: boolean;
+  icon?: IconName;
+}) {
+  return (
+    <Press label={label} onPress={onPress} style={{
+      minHeight: 54, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12,
+      backgroundColor: secondary ? vt.blueSoft : colors.blue,
+      borderColor: secondary ? vt.blueBorder : colors.blue, borderWidth: 1,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    }}>
+      {icon && <Ionicons name={icon} size={20} color={secondary ? colors.blue : '#FFFFFF'} />}
+      <Text style={{ flexShrink: 1, textAlign: 'center', color: secondary ? colors.blue : '#FFFFFF', fontSize: 15, lineHeight: 22, fontWeight: '700' }}>{label}</Text>
+      {!secondary && !icon && <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />}
+    </Press>
+  );
+}
+
+export function VolunteerIconButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  return (
+    <Press label={label} onPress={onPress} style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: vt.blueSoft, borderWidth: 1, borderColor: vt.blueBorder, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={icon} size={22} color={colors.blue} />
+    </Press>
+  );
+}
 
 /* Accent color per priority (used for badges and card stripes). */
 export function priorityColor(priority: 'Medium' | 'High' | 'Critical') {
@@ -60,8 +116,8 @@ export function InfoRow({ icon, text }: { icon: IconName; text: string }) {
 
 export function Tag({ text }: { text: string }) {
   return (
-    <View style={{ backgroundColor: colors.fill, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
-      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.text }}>{text}</Text>
+    <View style={{ backgroundColor: vt.blueSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.blue }}>{text}</Text>
     </View>
   );
 }
@@ -97,8 +153,8 @@ export function AvailabilityPill({ online, onToggle }: { online: boolean; onTogg
         paddingHorizontal: 14,
         borderRadius: 24,
         borderWidth: 1,
-        borderColor: online ? vt.tealBorder : colors.border,
-        backgroundColor: online ? vt.tealSoft : colors.fill,
+        borderColor: online ? vt.blueBorder : colors.border,
+        backgroundColor: online ? vt.blueSoft : colors.fill,
       }}
     >
       <Animated.View
@@ -106,13 +162,14 @@ export function AvailabilityPill({ online, onToggle }: { online: boolean; onTogg
           width: 10,
           height: 10,
           borderRadius: 5,
-          backgroundColor: online ? colors.teal : colors.muted,
+          backgroundColor: online ? colors.blue : colors.muted,
           opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.35] }),
         }}
       />
-      <Text style={{ fontSize: 14, fontWeight: '800', color: online ? colors.teal : colors.muted }}>
+      <Text style={{ fontSize: 14, fontWeight: '800', color: online ? colors.blue : colors.muted }}>
         {online ? 'Available' : 'Offline'}
       </Text>
+      <Ionicons name="swap-horizontal" size={16} color={online ? colors.blue : colors.muted} />
     </Press>
   );
 }
@@ -136,7 +193,7 @@ export function SwipeToAccept({
   label = 'Swipe to accept',
   doneLabel = 'Accepted',
   onAccept,
-  color = colors.teal,
+  color = colors.blue,
 }: {
   label?: string;
   doneLabel?: string;
@@ -260,9 +317,9 @@ export function SwipeToAccept({
       style={{
         height: TRACK_H,
         borderRadius: TRACK_H / 2,
-        backgroundColor: vt.tealSoft,
+        backgroundColor: vt.blueSoft,
         borderWidth: 1,
-        borderColor: vt.tealBorder,
+        borderColor: vt.blueBorder,
         overflow: 'hidden',
         justifyContent: 'center',
       }}
@@ -380,7 +437,7 @@ function StepDot({ state, index }: { state: DotState; index: number }) {
 
   return (
     <View style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}>
-      {state === 'current' && <Rings color={colors.teal} size={46} count={2} />}
+      {state === 'current' && <Rings color={colors.blue} size={46} count={2} />}
       <Animated.View
         style={{
           transform: [{ scale }],
@@ -388,8 +445,8 @@ function StepDot({ state, index }: { state: DotState; index: number }) {
           height: 30,
           borderRadius: 15,
           borderWidth: 2,
-          borderColor: state === 'todo' ? colors.border : colors.teal,
-          backgroundColor: state === 'todo' ? '#FFFFFF' : colors.teal,
+          borderColor: state === 'todo' ? colors.border : colors.blue,
+          backgroundColor: state === 'todo' ? '#FFFFFF' : colors.blue,
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -452,7 +509,7 @@ export function ProgressStepper({
         <Animated.View
           style={{
             height: 3,
-            backgroundColor: colors.teal,
+            backgroundColor: colors.blue,
             width: progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
           }}
         />
@@ -465,12 +522,13 @@ export function ProgressStepper({
             <View key={label} style={{ flex: 1, alignItems: 'center', gap: space.sm }}>
               <StepDot state={state} index={i} />
               <Text
-                numberOfLines={1}
+                numberOfLines={2}
                 style={{
                   fontSize: 12,
                   lineHeight: 16,
+                  textAlign: 'center',
                   fontWeight: state === 'current' ? '800' : '600',
-                  color: state === 'todo' ? colors.muted : colors.teal,
+                  color: state === 'todo' ? colors.muted : colors.blue,
                 }}
               >
                 {label}

@@ -400,7 +400,7 @@ export default function ResidentHome() {
               {[
                 {
                   label: 'Send detail message',
-                  onPress: () => Alert.alert('Demo message', 'Safety-message sharing will be connected later.'),
+                  onPress: () => Alert.alert('Safety update', 'Your status is marked safe. You can review it in Status.'),
                   color: SAFE_ACCENT,
                   background: '#CCE4DD',
                   border: '#AED6CA',

@@ -171,7 +171,7 @@ export default function SosScreen({ navigation }: Props) {
           <ActivityIndicator size="large" color={colors.sos} />
           <Text style={styles.section}>Sending your SOS…</Text>
           <Text style={[styles.subtitle, { textAlign: 'center' }]}>
-            Getting your location and saving your answers.
+            Preparing your location and request details.
           </Text>
         </View>
       </Page>
@@ -197,9 +197,9 @@ export default function SosScreen({ navigation }: Props) {
           >
             <Ionicons name="checkmark" size={48} color={colors.green} />
           </Animated.View>
-          <Text style={[styles.title, { textAlign: 'center' }]}>SOS saved (demo)</Text>
+          <Text style={[styles.title, { textAlign: 'center' }]}>SOS sent</Text>
           <Text style={[styles.subtitle, { textAlign: 'center' }]}>
-            This mockup doesn’t contact real responders. Keep your phone on.
+            Keep your phone on and track your request in Status.
           </Text>
         </View>
         <View style={styles.card}>

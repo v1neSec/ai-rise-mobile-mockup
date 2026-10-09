@@ -57,10 +57,10 @@ export default function WelcomeScreen({ navigation }: Props) {
         ]}
       >
         <Text style={{ color: colors.danger, fontWeight: '700' }}>
-          Flood alert · Demo
+          Flood alert
         </Text>
         <Text style={styles.subtitle}>
-          Sample flood event for the hackathon presentation.
+          Stay informed and prepared in your community.
         </Text>
       </View> */}
 

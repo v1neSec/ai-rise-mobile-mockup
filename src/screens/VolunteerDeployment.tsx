@@ -5,9 +5,10 @@ import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LAST_STAGE, VolunteerTabParamList, stepLabels, useSession } from '../session';
-import { Action, colors, Page, space, styles } from '../components/UI';
+import { colors, Page, space, styles } from '../components/UI';
 import { FadeIn } from '../components/Motion';
-import { InfoRow, PriorityBadge, ProgressStepper, Tag, vt } from '../components/VolunteerUI';
+import { SuccessConfirmation } from '../components/SuccessConfirmation';
+import { InfoRow, PriorityBadge, ProgressStepper, Tag, vt, volunteerCard, VolunteerAction, VolunteerHeader, VolunteerIconButton } from '../components/VolunteerUI';
 
 type Nav = BottomTabNavigationProp<VolunteerTabParamList, 'Deployment'>;
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -46,7 +47,7 @@ function IssueSheet({
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(16,24,40,0.45)' }}>
-        <Pressable accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Close issue options" style={StyleSheet.absoluteFill} onPress={onClose} />
         <Animated.View
           style={{
             transform: [{ translateY: slide }],
@@ -58,62 +59,37 @@ function IssueSheet({
             gap: space.sm,
           }}
         >
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: vt.blueBorder, alignSelf: 'center', marginBottom: 12 }} />
           <Text style={styles.section}>What’s the problem?</Text>
-          <Text style={[styles.subtitle, { marginBottom: space.sm }]}>Command will be notified right away.</Text>
+          <Text style={[styles.subtitle, { marginBottom: space.sm }]}>Choose the issue affecting your deployment.</Text>
           {ISSUES.map((o) => (
             <Pressable
               key={o.label}
               accessibilityRole="button"
               onPress={() => onPick(o.label)}
               style={({ pressed }) => ({
-                minHeight: 56,
+                minHeight: 64,
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: space.md,
                 paddingHorizontal: space.md,
-                borderRadius: 14,
+                borderRadius: 16,
                 borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: pressed ? colors.fill : '#FFFFFF',
+                borderColor: vt.blueBorder,
+                backgroundColor: pressed ? vt.blueSoft : '#FFFFFF',
               })}
             >
-              <Ionicons name={o.icon} size={22} color={colors.danger} />
+              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: vt.blueSoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={o.icon} size={21} color={colors.blue} />
+              </View>
               <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: colors.text }}>{o.label}</Text>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </Pressable>
           ))}
-          <Action label="Cancel" secondary onPress={onClose} />
+          <VolunteerAction label="Cancel" secondary onPress={onClose} />
         </Animated.View>
       </View>
     </Modal>
-  );
-}
-
-/* ---------- Completion card with a pop-in check ---------- */
-function CompleteCard({ outcome }: { outcome: string }) {
-  const pop = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.spring(pop, { toValue: 1, useNativeDriver: true, bounciness: 14 }).start();
-  }, [pop]);
-
-  return (
-    <FadeIn style={[styles.card, { backgroundColor: vt.tealSoft, borderColor: vt.tealBorder, alignItems: 'center', gap: space.sm }]}>
-      <Animated.View
-        style={{
-          width: 64,
-          height: 64,
-          borderRadius: 32,
-          backgroundColor: colors.teal,
-          alignItems: 'center',
-          justifyContent: 'center',
-          transform: [{ scale: pop }],
-        }}
-      >
-        <Ionicons name="checkmark" size={36} color="#FFFFFF" />
-      </Animated.View>
-      <Text style={{ fontSize: 20, lineHeight: 26, fontWeight: '800', color: colors.teal }}>Deployment complete</Text>
-      <Text style={[styles.subtitle, { textAlign: 'center' }]}>{outcome}</Text>
-    </FadeIn>
   );
 }
 
@@ -126,26 +102,26 @@ export default function VolunteerDeployment() {
   if (!active) {
     return (
       <Page edges={['top']}>
-        <Text style={styles.title}>Active deployment</Text>
-        <FadeIn style={[styles.card, { alignItems: 'center', gap: space.md, paddingVertical: space.xl }]}>
+        <VolunteerHeader title="Active deployment" subtitle="Follow your assignment, one step at a time." />
+        <FadeIn style={[volunteerCard, { alignItems: 'center', paddingVertical: 28 }]}>
           <View
             style={{
               width: 64,
               height: 64,
               borderRadius: 32,
-              backgroundColor: colors.fill,
+              backgroundColor: vt.blueSoft,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Ionicons name="flag-outline" size={30} color={colors.muted} />
+            <Ionicons name="flag-outline" size={30} color={colors.blue} />
           </View>
           <Text style={styles.section}>No active deployment</Text>
           <Text style={[styles.subtitle, { textAlign: 'center' }]}>
             Accept a request from the Home tab and it will show up here.
           </Text>
           <View style={{ alignSelf: 'stretch' }}>
-            <Action label="View requests" color={colors.teal} onPress={() => navigation.navigate('Hub')} />
+            <VolunteerAction label="View requests" onPress={() => navigation.navigate('Hub')} />
           </View>
         </FadeIn>
       </Page>
@@ -162,10 +138,6 @@ export default function VolunteerDeployment() {
     'Check the area and the people before you begin.',
     `${d.action} in progress. Complete once everyone is helped.`,
   ];
-
-  const heroBg = d.priority === 'Critical' ? vt.criticalSoft : d.priority === 'High' ? vt.highSoft : colors.surface;
-  const heroBorder =
-    d.priority === 'Critical' ? vt.criticalBorder : d.priority === 'High' ? vt.highBorder : colors.border;
 
   function next() {
     if (stage === LAST_STAGE - 1) {
@@ -186,47 +158,43 @@ export default function VolunteerDeployment() {
   function pickIssue(label: string) {
     reportIssue(label);
     setSheet(false);
-    Alert.alert('Issue reported', 'Command has been notified.');
+    Alert.alert('Issue reported', 'Added to your team broadcast.');
+  }
+
+  if (complete) {
+    return (
+      <Page edges={['top']} footer={<VolunteerAction label="Done" icon="checkmark-circle-outline" onPress={done} />}>
+        <SuccessConfirmation title="Deployment complete" message="Thank you for helping your community." />
+        <View style={volunteerCard}>
+          <Text style={{ color: colors.blue, fontSize: 12, fontWeight: '700' }}>DEPLOYMENT #{d.id}</Text>
+          <Text style={styles.section}>{d.title}</Text>
+          <Text style={styles.subtitle}>{d.outcome}</Text>
+          <InfoRow icon="location-outline" text={d.location} />
+          <ProgressStepper stage={stage} labels={stepLabels(d)} complete />
+        </View>
+      </Page>
+    );
   }
 
   return (
     <>
       <Page
         edges={['top']}
-        footer={
-          complete ? (
-            <Action label="Done" color={colors.teal} onPress={done} />
-          ) : (
-            <>
-              <Action label={nextLabels[stage]} color={colors.teal} onPress={next} />
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setSheet(true)}
-                style={({ pressed }) => ({
-                  minHeight: 52,
-                  borderRadius: 14,
-                  borderWidth: 1.5,
-                  borderColor: colors.danger,
-                  backgroundColor: pressed ? vt.criticalSoft : '#FFFFFF',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                })}
-              >
-                <Text style={{ color: colors.danger, fontSize: 16, fontWeight: '700' }}>Report issue</Text>
-              </Pressable>
-            </>
-          )
-        }
+        footer={<>
+          <VolunteerAction label={nextLabels[stage]} onPress={next} />
+          <VolunteerAction label="Report issue" icon="flag-outline" secondary onPress={() => setSheet(true)} />
+        </>}
       >
         <FadeIn>
-          <Text style={styles.title}>Active deployment</Text>
+          <VolunteerHeader title="Active deployment" subtitle="Follow your assignment, one step at a time."
+            action={<VolunteerIconButton icon="home-outline" label="Back to volunteer home" onPress={() => navigation.navigate('Hub')} />} />
         </FadeIn>
 
         {/* Summary */}
-        <FadeIn delay={60} style={[styles.card, { backgroundColor: heroBg, borderColor: heroBorder }]}>
+        <FadeIn delay={60} style={volunteerCard}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.muted }}>
+              <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.blue }}>
                 DEPLOYMENT #{d.id}
               </Text>
               <Text style={{ fontSize: 20, lineHeight: 26, fontWeight: '800', color: colors.text }}>{d.title}</Text>
@@ -241,17 +209,25 @@ export default function VolunteerDeployment() {
         </FadeIn>
 
         {/* Progress */}
-        <FadeIn delay={120} style={[styles.card, { gap: space.lg }]}>
-          <Text style={styles.section}>Deployment progress</Text>
-          <ProgressStepper stage={stage} labels={stepLabels(d)} complete={complete} />
-          <Text style={[styles.small, { textAlign: 'center' }]}>
-            {complete ? 'All steps finished.' : hints[stage]}
+        <FadeIn delay={120} style={[volunteerCard, { gap: 20 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={[styles.section, { flex: 1 }]}>Deployment progress</Text>
+            <View style={{ borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: vt.blueSoft }}>
+              <Text style={{ color: colors.blue, fontSize: 12, fontWeight: '700' }}>{`${stage + 1} / ${stepLabels(d).length}`}</Text>
+            </View>
+          </View>
+          <ProgressStepper stage={stage} labels={stepLabels(d)} complete={false} />
+          <Text style={[styles.small, { textAlign: 'center', backgroundColor: vt.blueSoft, padding: 12, borderRadius: 12 }]}>
+            {hints[stage]}
           </Text>
         </FadeIn>
 
         {/* Briefing */}
-        <FadeIn delay={180} style={[styles.card, { gap: space.md }]}>
-          <Text style={styles.section}>Situation briefing</Text>
+        <FadeIn delay={180} style={volunteerCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="document-text-outline" size={20} color={colors.blue} />
+            <Text style={styles.section}>Situation briefing</Text>
+          </View>
           <Text style={styles.subtitle}>{d.briefing}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
             {d.tags.map((t) => (
@@ -260,7 +236,6 @@ export default function VolunteerDeployment() {
           </View>
         </FadeIn>
 
-        {complete && <CompleteCard outcome={d.outcome} />}
       </Page>
 
       <IssueSheet open={sheet} onClose={() => setSheet(false)} onPick={pickIssue} />

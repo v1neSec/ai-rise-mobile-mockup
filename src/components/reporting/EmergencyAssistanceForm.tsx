@@ -1,66 +1,78 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSession } from '../../session';
-import { captureReportLocation } from '../../utils/reportLocation';
-import { Action, colors, Field, Page, space, styles } from '../UI';
+import { SosRequest, useSession } from '../../session';
+import { MockLocationPin, MockPin } from './MockLocationPin';
+import { ReportSuccess } from './ReportSuccess';
+import { colors, space, styles } from '../UI';
+import { FormAction as Action, FormField as Field, FormPage as Page, FormError, FormProgress, formCard, formTheme } from './ReportFormUI';
 import { ReportFormHeader } from './ReportFormHeader';
+import { FadeIn } from '../Motion';
 
 const VULNERABLE = ['Children / Infants', 'Elderly', 'Persons with Disability', 'Pregnant'];
+const STEPS = [
+  { title: 'Who needs help?', hint: 'Add the number of people and anyone who needs extra care.' },
+  { title: 'What is happening?', hint: 'Describe the emergency so the situation is clear.' },
+  { title: 'Review your request', hint: 'Check your answers before saving your request.' },
+];
 
 export function EmergencyAssistanceForm({ onBack, onViewStatus }: { onBack: () => void; onViewStatus: () => void }) {
   const { addSos } = useSession();
+  const [step, setStep] = useState(0);
   const [people, setPeople] = useState('');
   const [vulnerable, setVulnerable] = useState<string[]>([]);
   const [details, setDetails] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [sent, setSent] = useState<SosRequest | null>(null);
+  const [pin, setPin] = useState<MockPin | null>(null);
+  const saving = !!sent;
   const [error, setError] = useState('');
   const submitting = useRef(false);
-  const mounted = useRef(true);
 
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-
-  async function submit() {
+  function validate(index: number): string {
     const count = Number(people.trim());
-    if (!/^\d+$/.test(people.trim()) || !Number.isSafeInteger(count) || count < 1) {
-      setError('Enter a whole number of people, at least 1.');
-      return;
+    if (index !== 1 && (!/^\d+$/.test(people.trim()) || !Number.isSafeInteger(count) || count < 1)) {
+      return 'Enter a whole number of people, at least 1.';
     }
-    if (details.trim().length < 10) { setError('Describe the emergency in at least 10 characters.'); return; }
-    if (submitting.current) return;
-    submitting.current = true;
-    setSaving(true);
-    setError('');
-    let location = 'Location unavailable';
-    try { location = await captureReportLocation(); } catch {
-      // Unavailable GPS must not block saving this local demo.
-    }
-    if (!mounted.current) return;
-    addSos({ nature: 'Emergency assistance', peopleCount: count, details: [details.trim()], vulnerable, priority: 'High', location });
-    setSaving(false);
-    submitting.current = false;
-    setPeople(''); setVulnerable([]); setDetails('');
-    Alert.alert('Emergency request saved (demo)',
-      `Saved locally for ${count} ${count === 1 ? 'person' : 'people'}. No responders have been contacted.${location === 'Location unavailable' ? ' Device location was unavailable.' : ''}`,
-      [{ text: 'View status', onPress: onViewStatus }, { text: 'Done', onPress: onBack }]);
+    if (index !== 0 && details.trim().length < 10) return 'Describe the emergency in at least 10 characters.';
+    if (index === 2 && !pin) return 'Choose and confirm your location pin.';
+    return '';
   }
 
+  function next() {
+    const message = validate(step);
+    if (message) { setError(message); return; }
+    setError(''); setStep(step + 1);
+  }
+
+  function submit() {
+    const message = validate(2);
+    if (message) { setError(message); return; }
+    if (submitting.current || !pin) return;
+    submitting.current = true;
+    setError('');
+    setSent(addSos({ nature: 'Emergency assistance', peopleCount: Number(people.trim()), details: [details.trim()], vulnerable, priority: 'High', location: pin.address }));
+  }
+
+  if (sent) return <ReportSuccess title="Help request sent" reference={sent.id} summary={`${people.trim()} people · ${sent.location}`} onBack={onBack} onViewStatus={onViewStatus} />;
+
   return (
-    <Page edges={['top']} footer={
+    <Page pageKey={step} edges={['top']} footer={
       <>
-        {!!error && <Text accessibilityLiveRegion="polite" style={{ color: colors.danger }}>{error}</Text>}
-        <Action label={saving ? 'Getting location…' : 'Send Emergency Request'} color={colors.sos} disabled={saving} onPress={submit} />
+        <FormError message={error} />
+        <Action label={step === 2 ? 'Send Emergency Request' : 'Continue'} busy={saving}
+          onPress={() => { if (step < 2) next(); else void submit(); }} />
       </>
     }>
-      <ReportFormHeader title="Request Emergency Assistance" onBack={onBack} disabled={saving} />
-      <View style={[styles.card, { backgroundColor: '#FFF7F7', borderColor: '#F1CDD0', gap: space.lg }]}>
+      <ReportFormHeader title="Request Help" disabled={saving}
+        onBack={() => { if (step > 0) { setStep(step - 1); setError(''); } else onBack(); }} />
+      <FormProgress step={step} total={STEPS.length} title={STEPS[step].title} hint={STEPS[step].hint} />
+      <FadeIn key={step} style={{ gap: space.xl }}>
+      {step === 0 && <View style={formCard}>
         <Field label="Number of people who need help" value={people} editable={!saving}
+          helperText="Include everyone who needs assistance."
           onChangeText={(value) => { setPeople(value); setError(''); }} placeholder="e.g. 5" keyboardType="number-pad" />
         <View style={{ gap: space.sm }}>
-          <Text style={styles.label}>Vulnerable persons present</Text>
+          <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>Who needs extra care? (optional)</Text>
           {VULNERABLE.map((label) => {
             const checked = vulnerable.includes(label);
             return (
@@ -68,26 +80,36 @@ export function EmergencyAssistanceForm({ onBack, onViewStatus }: { onBack: () =
                 accessibilityState={{ checked, disabled: saving }} disabled={saving}
                 onPress={() => { setVulnerable((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label]); setError(''); }}
                 style={({ pressed }) => ({
-                  minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: checked ? colors.sos : colors.border,
-                  backgroundColor: pressed ? colors.fill : colors.surface, paddingHorizontal: 12,
+                  minHeight: 52, borderRadius: 14, borderWidth: 1.5, borderColor: checked ? formTheme.accent : formTheme.border,
+                  backgroundColor: checked ? formTheme.soft : pressed ? colors.fill : colors.surface, paddingHorizontal: 12,
                   flexDirection: 'row', alignItems: 'center', gap: 10,
                 })}>
-                <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={22} color={checked ? colors.sos : colors.border} />
+                <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={22} color={checked ? formTheme.accent : '#A5B5CB'} />
                 <Text style={{ flex: 1, color: colors.text, fontSize: 14 }}>{label}</Text>
               </Pressable>
             );
           })}
         </View>
-        <Field label="Emergency details" value={details} editable={!saving}
+      </View>}
+      {step === 1 && <View style={formCard}>
+        <Field label="Emergency details" value={details} editable={!saving} helperText="At least 10 characters. Include floor level, road access, or medical needs."
           onChangeText={(value) => { setDetails(value); setError(''); }}
           placeholder="Describe your situation, floor level, road access, or medical needs…"
           multiline autoCapitalize="sentences" autoCorrect style={{ minHeight: 112, textAlignVertical: 'top' }} />
-        <View style={[styles.note, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
-          <Ionicons name="location-outline" size={18} color={colors.blue} />
-          <Text style={[styles.small, { flex: 1 }]}>Your device location is captured when you submit, if permission is allowed.</Text>
+      </View>}
+      {step === 2 && <>
+        <View style={formCard}>
+          <Text style={styles.label}>People who need help</Text>
+          <Text style={styles.section}>{people.trim()} {Number(people) === 1 ? 'person' : 'people'}</Text>
+          <Text style={styles.label}>Extra care</Text>
+          <Text style={styles.subtitle}>{vulnerable.length ? vulnerable.join(' · ') : 'No groups selected'}</Text>
+          <Text style={styles.label}>Emergency details</Text>
+          <Text style={styles.subtitle}>{details.trim()}</Text>
         </View>
-      </View>
-      <Text style={styles.small}>Mockup only. Requests are saved on this device for this session.</Text>
+        <MockLocationPin value={pin} onChange={(value) => { setPin(value); setError(''); }} />
+
+      </>}
+      </FadeIn>
     </Page>
   );
 }

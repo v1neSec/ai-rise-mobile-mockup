@@ -36,7 +36,7 @@ export default function StatusScreen() {
   const notes = [
     ...sos.map((r) => ({ t: r.createdAt, icon: 'alert-circle-outline' as const, text: `${r.id} is now ${r.status.toLowerCase()}.` })),
     ...reports.map((r) => ({ t: r.createdAt, icon: 'document-text-outline' as const, text: `${r.id} ${r.status.toLowerCase()}.` })),
-    ...supplies.map((r) => ({ t: r.created_at, icon: 'cube-outline' as const, text: `${r.id} supply request saved (demo).` })),
+    ...supplies.map((r) => ({ t: r.created_at, icon: 'cube-outline' as const, text: `${r.id} supply request submitted.` })),
     { t: new Date().toISOString(), icon: 'notifications-outline' as const, text: 'Apalit River water level rising. Avoid river banks.' },
   ];
 
@@ -104,7 +104,7 @@ export default function StatusScreen() {
           <Text style={styles.subtitle}>{request.address} · {request.barangay}</Text>
           <Text style={styles.small}>Contact: {request.contact_number}</Text>
           <Text style={styles.small}>Location: {request.location.latitude.toFixed(5)}, {request.location.longitude.toFixed(5)}</Text>
-          <Text style={styles.small}>{request.evidence ? 'Photo evidence attached · ' : ''}No deliverer assigned · Demo request</Text>
+          <Text style={styles.small}>{request.evidence ? 'Photo evidence attached · ' : ''}Awaiting delivery assignment</Text>
           <Text selectable style={styles.small}>{request.id}</Text>
         </FadeIn>
       ))}

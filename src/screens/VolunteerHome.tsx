@@ -1,6 +1,7 @@
 import React, { ComponentProps, useCallback } from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,7 +13,7 @@ import {
   stepLabels,
   useSession,
 } from '../session';
-import { Action, colors, Page, space, styles } from '../components/UI';
+import { colors, Page, space, styles } from '../components/UI';
 import { FadeIn } from '../components/Motion';
 import {
   AvailabilityPill,
@@ -21,6 +22,10 @@ import {
   SwipeToAccept,
   priorityColor,
   vt,
+  volunteerCard,
+  VolunteerAction,
+  VolunteerHeader,
+  VolunteerIconButton,
 } from '../components/VolunteerUI';
 
 type Nav = BottomTabNavigationProp<VolunteerTabParamList, 'Hub'>;
@@ -44,17 +49,19 @@ function Tile({
     <View
       style={{
         flex: 1,
-        backgroundColor: colors.fill,
-        borderRadius: 12,
+        backgroundColor: colors.surface,
+        borderColor: vt.blueBorder,
+        borderWidth: 1,
+        borderRadius: 16,
         padding: space.md,
         gap: 6,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Ionicons name={icon} size={15} color={colors.muted} />
+        <Ionicons name={icon} size={16} color={colors.blue} />
         <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.muted }}>{label}</Text>
       </View>
-      <Text numberOfLines={1} style={{ fontSize: 16, lineHeight: 22, fontWeight: '800', color }}>
+      <Text style={{ fontSize: 15, lineHeight: 21, fontWeight: '800', color }}>
         {value}
       </Text>
     </View>
@@ -65,7 +72,7 @@ function RequestCard({ d, index, onAccept }: { d: Deployment; index: number; onA
   return (
     <FadeIn
       delay={index * 90}
-      style={[styles.card, { gap: space.md, overflow: 'hidden', paddingLeft: space.lg + 4 }]}
+      style={[volunteerCard, { overflow: 'hidden', paddingLeft: 22 }]}
     >
       {/* priority stripe */}
       <View
@@ -75,7 +82,7 @@ function RequestCard({ d, index, onAccept }: { d: Deployment; index: number; onA
           left: 0,
           top: 0,
           bottom: 0,
-          width: 6,
+          width: 4,
           backgroundColor: priorityColor(d.priority),
         }}
       />
@@ -85,6 +92,10 @@ function RequestCard({ d, index, onAccept }: { d: Deployment; index: number; onA
           <InfoRow icon="location-outline" text={`${d.location} · ${d.distance}`} />
         </View>
         <PriorityBadge priority={d.priority} />
+      </View>
+      <View style={{ gap: 8, backgroundColor: '#F7F9FE', borderRadius: 14, padding: 12 }}>
+        <InfoRow icon="people-outline" text={d.people} />
+        <InfoRow icon="navigate-outline" text={`Access: ${d.access}`} />
       </View>
       <SwipeToAccept onAccept={onAccept} />
     </FadeIn>
@@ -135,45 +146,48 @@ export default function VolunteerHome() {
   return (
     <Page edges={['top']}>
       {/* Header */}
-      <FadeIn style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Volunteer Hub</Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            Hello, {session?.name} · {completedCount} completed
-          </Text>
-        </View>
-        <AvailabilityPill online={volunteerOnline} onToggle={() => setVolunteerOnline(!volunteerOnline)} />
+      <FadeIn>
+        <VolunteerHeader title="Volunteer Hub" subtitle={`Hello, ${session?.name ?? 'Volunteer'} · ${completedCount} completed`}
+          action={<VolunteerIconButton icon="log-out-outline" label="Sign out" onPress={logout} />} />
       </FadeIn>
 
       {/* Profile */}
-      <FadeIn delay={60} style={[styles.card, { gap: space.md }]}>
-        <Text style={styles.section}>My profile</Text>
-        <View style={{ flexDirection: 'row', gap: space.md }}>
-          <Tile icon="car-outline" label="Vehicle" value={PROFILE.vehicle} />
-          <Tile icon="people-outline" label="Capacity" value={PROFILE.capacity} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: space.md }}>
-          <Tile icon="location-outline" label="Location" value={PROFILE.location} />
-          <Tile
-            icon={active ? 'navigate-outline' : volunteerOnline ? 'radio-button-on' : 'moon-outline'}
-            label="Status"
-            value={statusText}
-            color={volunteerOnline || active ? colors.teal : colors.muted}
-          />
-        </View>
+      <FadeIn delay={60}>
+        <LinearGradient colors={['#EDF3FF', '#F8FAFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={volunteerCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
+            <View style={{ gap: 3 }}>
+              <Text style={styles.section}>Ready to help</Text>
+              <Text style={styles.small}>Your deployment profile</Text>
+            </View>
+            <AvailabilityPill online={volunteerOnline} onToggle={() => setVolunteerOnline(!volunteerOnline)} />
+          </View>
+          <View style={{ flexDirection: 'row', gap: space.md }}>
+            <Tile icon="car-outline" label="Vehicle" value={PROFILE.vehicle} />
+            <Tile icon="people-outline" label="Capacity" value={PROFILE.capacity} />
+          </View>
+          <View style={{ flexDirection: 'row', gap: space.md }}>
+            <Tile icon="location-outline" label="Location" value={PROFILE.location} />
+            <Tile
+              icon={active ? 'navigate-outline' : volunteerOnline ? 'radio-button-on' : 'moon-outline'}
+              label="Status"
+              value={statusText}
+              color={volunteerOnline || active ? colors.blue : colors.muted}
+            />
+          </View>
+        </LinearGradient>
       </FadeIn>
 
       {/* Requests */}
       <View style={{ gap: space.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <Text style={styles.section}>Deployment requests</Text>
+          <Text style={[styles.section, { flex: 1 }]}>Deployment requests</Text>
           {volunteerOnline && !active && requests.length > 0 && (
             <View
               style={{
                 minWidth: 24,
                 height: 24,
                 borderRadius: 12,
-                backgroundColor: colors.teal,
+                backgroundColor: colors.blue,
                 alignItems: 'center',
                 justifyContent: 'center',
                 paddingHorizontal: 6,
@@ -185,11 +199,11 @@ export default function VolunteerHome() {
         </View>
 
         {active ? (
-          <FadeIn style={[styles.card, { backgroundColor: vt.tealSoft, borderColor: vt.tealBorder }]}>
+          <FadeIn style={[volunteerCard, { backgroundColor: vt.blueSoft }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-              <Ionicons name={complete ? 'checkmark-circle' : 'navigate-circle'} size={30} color={colors.teal} />
+              <Ionicons name={complete ? 'checkmark-circle' : 'navigate-circle'} size={30} color={colors.blue} />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.teal }}>
+                <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.blue }}>
                   {complete ? 'Deployment complete' : 'Deployment in progress'}
                 </Text>
                 <Text style={styles.small} numberOfLines={2}>
@@ -199,22 +213,22 @@ export default function VolunteerHome() {
                 </Text>
               </View>
             </View>
-            <Action label="Open deployment" color={colors.teal} onPress={() => navigation.navigate('Deployment')} />
+            <VolunteerAction label="Open deployment" onPress={() => navigation.navigate('Deployment')} />
           </FadeIn>
         ) : !volunteerOnline ? (
-          <FadeIn style={[styles.card, { alignItems: 'center', gap: space.md }]}>
+          <FadeIn style={[volunteerCard, { alignItems: 'center' }]}>
             <Ionicons name="moon-outline" size={30} color={colors.muted} />
             <Text style={styles.section}>You’re offline</Text>
             <Text style={[styles.subtitle, { textAlign: 'center' }]}>
               Go available to start receiving deployment requests.
             </Text>
             <View style={{ alignSelf: 'stretch' }}>
-              <Action label="Go available" color={colors.teal} onPress={() => setVolunteerOnline(true)} />
+              <VolunteerAction label="Go available" onPress={() => setVolunteerOnline(true)} />
             </View>
           </FadeIn>
         ) : requests.length === 0 ? (
-          <FadeIn style={[styles.card, { alignItems: 'center', gap: space.sm }]}>
-            <Ionicons name="checkmark-circle-outline" size={30} color={colors.teal} />
+          <FadeIn style={[volunteerCard, { alignItems: 'center' }]}>
+            <Ionicons name="checkmark-circle-outline" size={30} color={colors.blue} />
             <Text style={styles.section}>All clear</Text>
             <Text style={[styles.subtitle, { textAlign: 'center' }]}>
               No requests right now. New ones will appear here.
@@ -226,9 +240,9 @@ export default function VolunteerHome() {
       </View>
 
       {/* Broadcast */}
-      <FadeIn delay={120} style={[styles.card, { gap: space.md }]}>
+      <FadeIn delay={120} style={volunteerCard}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <Ionicons name="radio-outline" size={20} color={colors.teal} />
+          <Ionicons name="radio-outline" size={20} color={colors.blue} />
           <Text style={styles.section}>Team broadcast</Text>
         </View>
         {broadcasts.length === 0 && <Text style={styles.subtitle}>No messages from your team yet.</Text>}
@@ -244,12 +258,13 @@ export default function VolunteerHome() {
               borderTopColor: colors.border,
             }}
           >
-            <Ionicons
-              name={b.urgent ? 'megaphone-outline' : 'chatbubble-ellipses-outline'}
-              size={20}
-              color={b.urgent ? colors.danger : colors.teal}
-              style={{ marginTop: 1 }}
-            />
+            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: b.urgent ? vt.criticalSoft : vt.blueSoft, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons
+                name={b.urgent ? 'megaphone-outline' : 'chatbubble-ellipses-outline'}
+                size={20}
+                color={b.urgent ? colors.danger : colors.blue}
+              />
+            </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text
                 style={{
@@ -268,8 +283,6 @@ export default function VolunteerHome() {
           </FadeIn>
         ))}
       </FadeIn>
-
-      <Action label="Sign out" secondary onPress={logout} />
     </Page>
   );
 }

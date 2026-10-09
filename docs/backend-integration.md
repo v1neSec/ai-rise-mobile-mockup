@@ -100,11 +100,13 @@ Source references refer to files inside the supplied backend.zip. These are sour
 The Report tab has three options using the existing app styling and tab navigation:
 
 - **Report Community Issue:** four steps (hazard type, description/photo, location, review). Saves to the local report list. Community reporting retains its resident sign-in gate.
-- **Request Emergency Assistance:** total people, optional vulnerable-group checkboxes, emergency details, and device location capture on submit. Saves to the local SOS list, with headcount/details visible in Status. Like the existing SOS demo, it is available to guests; the actual backend requires authentication.
-- **Request Supplies:** six guided steps (supply types, household counts, flood/medical needs, delivery details, numeric location/photo, review), followed by a local confirmation screen. Saves to a separate supply list in Status. No delivery is simulated or automatically marked complete.
+- **Request Help:** three steps (people/extra care, emergency details, review), with a confirmed mock location pin on review. Saves to the local SOS list, with headcount/details visible in Status. Like the existing SOS demo, it is available to guests; the actual backend requires authentication.
+- **Request Supplies:** six guided steps (supply types, household counts, flood/medical needs, mock delivery pin/contact, optional photo, review), followed by an animated local confirmation screen. Saves to a separate supply list in Status. No delivery is simulated or automatically marked complete.
 - **Scan with AI:** cancellable simulated progress overlay and an explicitly labeled sample flood suggestion. It does not analyze photos or contact an AI service. Timers are cleaned up on cancellation/unmount.
 
 `reportingService.ts` follows the shared Axios service-object format. It prepares only routes confirmed in the ZIP and is not imported by these screens:
+
+All three forms share scoped controls in `src/components/reporting/ReportFormUI.tsx`: blue actions and selections, white cards, soft blue highlights, focused input borders, common step progress, accessible error messages, and loading states. Each step resets scroll position and retains parent-owned answers. Step changes dismiss the keyboard, and form bodies use the existing fade animation. These controls do not change other screens or connect any API.
 
 | Method | Confirmed endpoint | Accepted contract |
 | --- | --- | --- |
@@ -119,7 +121,7 @@ These convenience entry points share the existing `communityReportService.create
 2. **Total headcount and group presence:** the mock captures a total and checkboxes; the backend takes separate `childrens`, `elderly`, `pwd`, `adults` counts. Agree on total/group-presence fields or collect actual counts. Never translate a checked group into one person or silently put everyone into `adults`.
 3. **Pregnancy:** no rescue pregnancy field; add a presence flag or actual count and define how it overlaps other counts.
 4. **Emergency type:** distinguish rescue, evacuation, and medical assistance using explicit form inputs and a supported backend contract; do not infer medical need from free text.
-5. **Emergency location/address:** the mock saves a coordinate string when GPS works; the backend needs numeric coordinates plus address inside a known barangay. Add address collection/reverse geocoding and define permission-denied fallback before wiring it. The demo saves `Location unavailable` when GPS fails; it is not a valid API payload.
+5. **Emergency location/address:** report forms now use sample mock pins without GPS or manual location entry. The help flow stores the sample address in its local SOS record. Before wiring it, retain real numeric coordinates and resolve an address/known barangay with a live pin picker and reverse geocoding. Sample pins are not real user locations.
 6. **Community coordinates:** latitude/longitude are read-only and are never persisted by the current report view. Add writable location before integrating device pins. Category is a free string, so the six mock categories fit the current category field.
 7. **AI hazard scan:** no registered classification/scan endpoint in the ZIP. Add image input, hazard suggestion, confidence/explanation, failures and cancellation semantics. Dashboard flood prediction/insight routes are not image classification APIs.
 8. **Community title:** the backend requires a title; the wizard currently collects category and description. Define a title field or reviewed title generation when integrating.
@@ -132,7 +134,7 @@ Existing serializer, ownership and deployment fixes listed above still apply. No
 
 Based on the supplied example, the mock stores all seven need flags (`needs_food`, `needs_water`, `needs_medicine`, `needs_baby_supplies`, `needs_hygiene`, `needs_clothing_blankets`, `needs_power_light`), `other_supplies`, `childrens`, `elderly`, `pwd`, `adults`, `flood_level`, `medical_assistance`, `barangay`, `address`, `contact_number`, optional `evidence` photo URI, and numeric `{ latitude, longitude }` location.
 
-The wizard validates selections, a nonzero household count, explicit flood/medical answers, delivery address/barangay, mobile-number format, and coordinate ranges. It preserves answers when moving back between steps and checks all steps again on submission. GPS permission failure can be handled with manual coordinates. Submission is explicit and protected against duplicate taps.
+The wizard validates selections, a nonzero household count, explicit flood/medical answers, a confirmed sample delivery pin, and mobile-number format. Sample pins supply the address, barangay, and numeric coordinates; there is no manual location entry or GPS request in reporting. It preserves answers when moving back between steps and checks all steps again on submission. Submission is explicit and protected against duplicate taps.
 
 `id`, `created_at`, and `status: need_supplies` are set locally; `deliverer` and `delivered_at` remain null. The demo session has no numeric account ID, so `user` is the session name or null; backend integration must use the authenticated numeric ID instead. `evidence` is a device URI, not a server upload URL. Nothing persists across an app restart.
 
@@ -148,3 +150,7 @@ The wizard validates selections, a nonzero household count, explicit flood/medic
 
 TypeScript and lint are local checks only. No requests were sent to ai-rise.onrender.com.
 Backend defects remain in the ZIP; no backend code was changed.
+
+## Mock confirmation and location UI
+
+All three reporting flows show a shared animated checkmark confirmation with View status and Back actions after saving locally. Volunteer deployment completion uses the same animation on an immediately visible completion screen. Reduced-motion preferences are respected by the shared animation. The sent labels are UI mockups; no report/request API is called. Community and help requests store a sample address; supplies also retain the sample coordinates and barangay. Replace these sample pins with a real map selection and address resolution before integration.

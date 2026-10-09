@@ -11,12 +11,12 @@ type Props = NativeStackScreenProps<RootStackParamList, "Auth">;
 
 const demoAccounts = {
   resident: {
-    identifier: "resident@airise.demo",
+    identifier: "resident@airise.app",
     password: "Demo123!",
     name: "Juan dela Cruz",
   },
   volunteer: {
-    identifier: "volunteer@airise.demo",
+    identifier: "volunteer@airise.app",
     password: "Demo123!",
     name: "Alex Santos",
   },
@@ -123,7 +123,7 @@ export default function AuthScreen({ route, navigation }: Props) {
       form.identifier.trim().toLowerCase() !== demo.identifier ||
       form.password !== demo.password
     ) {
-      setError("Use the demo email and password shown below.");
+      setError("The email or password is incorrect. Please try again.");
       return;
     }
 
@@ -190,12 +190,12 @@ export default function AuthScreen({ route, navigation }: Props) {
 
   function finishRegistration() {
     Alert.alert(
-      "Demo registration",
-      "This starts a temporary demo session. No account is created on a server, and no password is stored.",
+      "Confirm registration",
+      "Check your details before continuing to your account.",
       [
         { text: "Keep editing", style: "cancel" },
         {
-          text: "Continue demo",
+          text: "Continue",
           onPress: () => complete(form.name.trim()),
         },
       ],
@@ -360,7 +360,7 @@ export default function AuthScreen({ route, navigation }: Props) {
         {!registering && (
           <>
             <Field
-              label="DEMO EMAIL"
+              label="EMAIL"
               value={form.identifier}
               onChangeText={(value) => update("identifier", value)}
               placeholder={demoAccounts[role].identifier}
@@ -568,12 +568,6 @@ export default function AuthScreen({ route, navigation }: Props) {
               </Text>
             )}
 
-            <View style={styles.note}>
-              <Text style={styles.small}>
-                Demo only. Selecting photos does not verify your identity or
-                authorize deployment.
-              </Text>
-            </View>
           </>
         )}
 
@@ -603,35 +597,6 @@ export default function AuthScreen({ route, navigation }: Props) {
         )}
       </View>
 
-      {!registering && (
-        <View style={styles.note}>
-          {/* <Text style={[styles.small, { fontWeight: "700" }]}>
-            Demo sign-in
-          </Text>
-          <Text selectable style={styles.small}>
-            {demoAccounts[role].identifier}
-          </Text>
-          <Text selectable style={styles.small}>
-            Password: Demo123!
-          </Text> */}
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() =>
-              setForm((previous) => ({
-                ...previous,
-                identifier: demoAccounts[role].identifier,
-                password: demoAccounts[role].password,
-              }))
-            }
-            style={{ paddingVertical: 12 }}
-          >
-            <Text style={{ color: accent, fontWeight: "700" }}>
-              Fill demo credentials
-            </Text>
-          </Pressable>
-        </View>
-      )}
 
       <Pressable
         accessibilityRole="button"
