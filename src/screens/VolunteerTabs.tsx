@@ -1,25 +1,20 @@
-import React, { ComponentProps } from 'react';
+import React from 'react';
 import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, VolunteerTabParamList, useSession } from '../session';
 import { Action, colors, Page, styles } from '../components/UI';
+import { AppPanelsProvider, FloatingMenu } from '../components/FloatingMenu';
 import VolunteerHome from './VolunteerHome';
 import VolunteerDeployment from './VolunteerDeployment';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
 type Props = NativeStackScreenProps<RootStackParamList, 'VolunteerHome'>;
 
-const icons: Record<keyof VolunteerTabParamList, [IconName, IconName]> = {
-  Hub: ['home', 'home-outline'],
-  Deployment: ['flag', 'flag-outline'],
-};
 
 const Tab = createBottomTabNavigator<VolunteerTabParamList>();
 
 export default function VolunteerTabs({ navigation }: Props) {
-  const { session, active } = useSession();
+  const { session } = useSession();
 
   if (session?.role !== 'volunteer') {
     return (
@@ -31,27 +26,15 @@ export default function VolunteerTabs({ navigation }: Props) {
   }
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: colors.blue,
-        tabBarInactiveTintColor: '#8A98AD',
-        tabBarStyle: { backgroundColor: '#FFFFFF', borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
-        tabBarIcon: ({ color, size, focused }) => (
-          <Ionicons name={icons[route.name][focused ? 0 : 1]} size={size} color={color} />
-        ),
-      })}
-    >
+    <AppPanelsProvider role="volunteer">
+    <Tab.Navigator backBehavior="firstRoute" tabBar={(props) => <FloatingMenu {...props} role="volunteer" />}
+      screenOptions={{ headerShown: false, animation: 'fade', sceneStyle: { backgroundColor: 'transparent' } }}>
       <Tab.Screen name="Hub" component={VolunteerHome} options={{ tabBarLabel: 'Home' }} />
       <Tab.Screen
         name="Deployment"
         component={VolunteerDeployment}
-        options={{
-          tabBarBadge: active ? 1 : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.blue, color: '#FFFFFF' },
-        }}
       />
     </Tab.Navigator>
+    </AppPanelsProvider>
   );
 }

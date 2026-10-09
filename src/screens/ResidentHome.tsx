@@ -1,11 +1,13 @@
 import React, { ComponentProps, useRef, useState } from 'react';
 import { Alert, Animated, Easing, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, formatTime, useSession } from '../session';
 import { colors, space, styles } from '../components/UI';
+import { AppBackground, HomeHeader } from '../components/AppChrome';
+import { useAppPanels } from '../components/FloatingMenu';
 import { Press, Rings } from '../components/Motion';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -46,10 +48,10 @@ function SosButton({ onPress, size }: { onPress: () => void; size: number }) {
           alignItems: 'center',
           justifyContent: 'center',
           shadowColor: colors.sos,
-          shadowOpacity: 0.45,
-          shadowRadius: 18,
+          shadowOpacity: 0.16,
+          shadowRadius: 12,
           shadowOffset: { width: 0, height: 6 },
-          elevation: 10,
+          elevation: 4,
         }}
       >
         <Text
@@ -260,16 +262,18 @@ function InfoCard({
 
 export default function ResidentHome() {
   const navigation = useNavigation<Nav>();
-  const { session, signOut, safeAt, markSafe } = useSession();
+  const { safeAt, markSafe } = useSession();
   const [contentHeight, setContentHeight] = useState(0);
+  const insets = useSafeAreaInsets();
   const compact = contentHeight > 0 && contentHeight < 650;
   const tight = contentHeight > 0 && contentHeight < 600;
-  const resident = session?.role === 'resident';
+  const { showProfile, showUpdates } = useAppPanels();
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppBackground />
       <View
-        onLayout={({ nativeEvent }) => setContentHeight(nativeEvent.layout.height)}
+        onLayout={({ nativeEvent }) => setContentHeight(nativeEvent.layout.height - 90 - insets.bottom)}
         style={{
           flex: 1,
           width: '100%',
@@ -277,53 +281,11 @@ export default function ResidentHome() {
           alignSelf: 'center',
           paddingHorizontal: compact ? 16 : 20,
           paddingVertical: tight ? 4 : compact ? 6 : 8,
+          paddingBottom: 90 + insets.bottom,
           gap: tight ? 4 : compact ? 6 : 10,
         }}
       >
-        {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 24, lineHeight: 28, fontWeight: '800', color: colors.text }}>AI-Rise</Text>
-            <Text style={[styles.subtitle, { fontSize: 13, lineHeight: 18 }]} numberOfLines={1}>
-              {resident ? `Hello, ${session.name}` : 'Browsing as a guest'}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={resident ? 'Sign out' : 'Sign in'}
-            onPress={() => (resident ? signOut() : navigation.navigate('Auth', { role: 'resident' }))}
-            style={({ pressed }) => ({
-              minHeight: 48,
-              width: 48,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: pressed ? colors.fill : '#FFFFFF',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-            })}
-          >
-            <Ionicons name={resident ? 'log-out-outline' : 'log-in-outline'} size={21} color={colors.blue} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Switch role"
-            onPress={() => navigation.navigate('Welcome')}
-            style={({ pressed }) => ({
-              width: 48,
-              height: 48,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: pressed ? colors.fill : colors.surface,
-              alignItems: 'center',
-              justifyContent: 'center',
-            })}
-          >
-            <Ionicons name="swap-horizontal-outline" size={21} color={colors.muted} />
-          </Pressable>
-        </View>
+        <HomeHeader role="Resident" onProfile={showProfile} onUpdates={showUpdates} />
 
         {/* 1. Situation */}
         <View style={[styles.card, { padding: tight ? 6 : compact ? 8 : 12, gap: 4 }]}>
@@ -436,7 +398,7 @@ export default function ResidentHome() {
           <HoldToConfirm onConfirm={markSafe} compact={compact} />
         )}
 
-        {/* 4. Emergency: uses the space remaining above the tabs. */}
+        {/* 4. Emergency: uses the space remaining above the floating menu. */}
         <RescueCard onPress={() => navigation.navigate('Sos')} />
       </View>
     </SafeAreaView>

@@ -1,9 +1,12 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SOS_STEPS, SosStatus, formatTime, useSession } from '../session';
+import { RootStackParamList, SOS_STEPS, SosStatus, formatTime, useSession } from '../session';
 import { colors, Page, styles } from '../components/UI';
 import { FadeIn } from '../components/Motion';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ScreenHeader } from '../components/AppChrome';
 import { SUPPLY_OPTIONS } from '../types/supply';
 
 function Timeline({ status }: { status: SosStatus }) {
@@ -31,6 +34,7 @@ function Timeline({ status }: { status: SosStatus }) {
 }
 
 export default function StatusScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { sos, reports, supplies, safeAt } = useSession();
 
   const notes = [
@@ -43,7 +47,7 @@ export default function StatusScreen() {
   return (
     <Page edges={['top']}>
       <FadeIn>
-        <Text style={styles.title}>My status</Text>
+        <ScreenHeader title="My status" onBack={() => navigation.navigate('ResidentTabs', { screen: 'Home' })} />
         <Text style={styles.subtitle}>Your rescue requests, supplies, reports and notifications.</Text>
       </FadeIn>
 
@@ -84,16 +88,16 @@ export default function StatusScreen() {
 
       <Text style={styles.label}>Supply requests</Text>
       {supplies.length === 0 ? (
-        <View style={styles.card}><Text style={styles.subtitle}>No supply requests yet. Use Request Supplies in the Report tab.</Text></View>
+        <View style={styles.card}><Text style={styles.subtitle}>No supply requests yet. Choose Request Supplies from the home menu.</Text></View>
       ) : supplies.map((request) => (
         <FadeIn key={request.id} style={[styles.card, { gap: 10 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Ionicons name="cube-outline" size={25} color={colors.teal} />
+            <Ionicons name="cube-outline" size={25} color={colors.blue} />
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={styles.rowTitle}>Household supply request</Text>
               <Text style={styles.small}>{formatTime(request.created_at)}</Text>
             </View>
-            <View style={{ backgroundColor: '#E7F4F1', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6 }}>
+            <View style={{ backgroundColor: '#EAF1FA', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6 }}>
               <Text style={{ color: colors.teal, fontWeight: '700', fontSize: 11 }}>Awaiting supplies</Text>
             </View>
           </View>
@@ -111,7 +115,7 @@ export default function StatusScreen() {
 
       <Text style={styles.label}>Submitted reports</Text>
       {reports.length === 0 ? (
-        <View style={styles.card}><Text style={styles.subtitle}>No reports yet. Use the Report tab.</Text></View>
+        <View style={styles.card}><Text style={styles.subtitle}>No reports yet. Choose Report Community Issue from the home menu.</Text></View>
       ) : (
         reports.map((r) => (
           <FadeIn key={r.id} style={[styles.card, { gap: 6 }]}>

@@ -3,6 +3,7 @@ import { AccessibilityInfo, Animated, Easing, PanResponder, StyleSheet, Text, Vi
 import { Ionicons } from '@expo/vector-icons';
 import { colors, space } from './UI';
 import { Press, Rings } from './Motion';
+import { softCard } from './AppChrome';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -21,10 +22,7 @@ export const vt = {
 
 export const volunteerCard = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderColor: vt.blueBorder,
-    borderWidth: 1,
-    borderRadius: 20,
+    ...softCard,
     padding: 18,
     gap: 16,
   },
@@ -38,7 +36,6 @@ export function VolunteerHeader({ title, subtitle, action }: {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <View style={{ flex: 1, gap: 4 }}>
-        <Text style={{ color: colors.blue, fontSize: 11, lineHeight: 16, fontWeight: '800', letterSpacing: 1 }}>VOLUNTEER SUPPORT</Text>
         <Text style={{ color: colors.text, fontSize: 24, lineHeight: 30, fontWeight: '800' }}>{title}</Text>
         <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>{subtitle}</Text>
       </View>
@@ -69,8 +66,8 @@ export function VolunteerAction({ label, onPress, secondary = false, icon }: {
 
 export function VolunteerIconButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
   return (
-    <Press label={label} onPress={onPress} style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: vt.blueSoft, borderWidth: 1, borderColor: vt.blueBorder, alignItems: 'center', justifyContent: 'center' }}>
-      <Ionicons name={icon} size={22} color={colors.blue} />
+    <Press label={label} onPress={onPress} style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={icon} size={22} color={colors.text} />
     </Press>
   );
 }

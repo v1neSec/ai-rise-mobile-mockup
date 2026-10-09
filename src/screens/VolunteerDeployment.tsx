@@ -1,13 +1,14 @@
-import React, { ComponentProps, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { ComponentProps, useState } from 'react';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LAST_STAGE, VolunteerTabParamList, stepLabels, useSession } from '../session';
 import { colors, Page, space, styles } from '../components/UI';
 import { FadeIn } from '../components/Motion';
 import { SuccessConfirmation } from '../components/SuccessConfirmation';
+import { ScreenHeader } from '../components/AppChrome';
+import { BottomSheet } from '../components/BottomSheet';
 import { InfoRow, PriorityBadge, ProgressStepper, Tag, vt, volunteerCard, VolunteerAction, VolunteerHeader, VolunteerIconButton } from '../components/VolunteerUI';
 
 type Nav = BottomTabNavigationProp<VolunteerTabParamList, 'Deployment'>;
@@ -30,66 +31,35 @@ function IssueSheet({
   onClose: () => void;
   onPick: (label: string) => void;
 }) {
-  const insets = useSafeAreaInsets();
-  const slide = useRef(new Animated.Value(360)).current;
-
-  useEffect(() => {
-    if (!open) return;
-    slide.setValue(360);
-    Animated.timing(slide, {
-      toValue: 0,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [open, slide]);
-
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(16,24,40,0.45)' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close issue options" style={StyleSheet.absoluteFill} onPress={onClose} />
-        <Animated.View
-          style={{
-            transform: [{ translateY: slide }],
-            backgroundColor: '#FFFFFF',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            padding: space.xl,
-            paddingBottom: space.xl + insets.bottom,
-            gap: space.sm,
-          }}
-        >
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: vt.blueBorder, alignSelf: 'center', marginBottom: 12 }} />
-          <Text style={styles.section}>What’s the problem?</Text>
-          <Text style={[styles.subtitle, { marginBottom: space.sm }]}>Choose the issue affecting your deployment.</Text>
-          {ISSUES.map((o) => (
-            <Pressable
-              key={o.label}
-              accessibilityRole="button"
-              onPress={() => onPick(o.label)}
-              style={({ pressed }) => ({
-                minHeight: 64,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.md,
-                paddingHorizontal: space.md,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: vt.blueBorder,
-                backgroundColor: pressed ? vt.blueSoft : '#FFFFFF',
-              })}
-            >
-              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: vt.blueSoft, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name={o.icon} size={21} color={colors.blue} />
-              </View>
-              <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: colors.text }}>{o.label}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </Pressable>
-          ))}
-          <VolunteerAction label="Cancel" secondary onPress={onClose} />
-        </Animated.View>
-      </View>
-    </Modal>
+    <BottomSheet title="What’s the problem?" open={open} onClose={onClose}>
+      <Text style={[styles.subtitle, { marginBottom: space.sm }]}>Choose the issue affecting your deployment.</Text>
+    {ISSUES.map((o) => (
+      <Pressable
+        key={o.label}
+        accessibilityRole="button"
+        onPress={() => onPick(o.label)}
+        style={({ pressed }) => ({
+          minHeight: 64,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.md,
+          paddingHorizontal: space.md,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: vt.blueBorder,
+          backgroundColor: pressed ? vt.blueSoft : '#FFFFFF',
+        })}
+      >
+        <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: vt.blueSoft, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name={o.icon} size={21} color={colors.blue} />
+        </View>
+        <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: colors.text }}>{o.label}</Text>
+        <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+      </Pressable>
+    ))}
+    <VolunteerAction label="Cancel" secondary onPress={onClose} />
+    </BottomSheet>
   );
 }
 
@@ -102,7 +72,7 @@ export default function VolunteerDeployment() {
   if (!active) {
     return (
       <Page edges={['top']}>
-        <VolunteerHeader title="Active deployment" subtitle="Follow your assignment, one step at a time." />
+        <ScreenHeader title="Active deployment" onBack={() => navigation.navigate('Hub')} />
         <FadeIn style={[volunteerCard, { alignItems: 'center', paddingVertical: 28 }]}>
           <View
             style={{

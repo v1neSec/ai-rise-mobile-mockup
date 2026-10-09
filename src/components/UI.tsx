@@ -13,49 +13,42 @@ import {
   TextInputProps,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Edge } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { AppBackground } from './AppChrome';
+import { colors, space, softCard } from './theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /* ---------- Design tokens ---------- */
-export const colors = {
-  background: '#F3F6FB',
-  surface: '#FFFFFF',
-  text: '#17243B',
-  muted: '#566680',
-  border: '#DCE4EE',
-  fill: '#EEF2F7',
-  blue: '#2264DF',
-  teal: '#0A857B',
-  danger: '#D92D20',
-  sos: '#D92D20',
-  green: '#0A7D52',
-};
-
-export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 };
+export { colors, space } from './theme';
 
 /* ---------- Page: safe area, keyboard, scroll, optional pinned footer ---------- */
 export function Page({
   children,
   edges,
   footer,
+  bottomSpace = 0,
 }: {
   children: React.ReactNode;
   edges?: Edge[];
   footer?: React.ReactNode;
+  bottomSpace?: number;
 }) {
+  const insets = useSafeAreaInsets();
   return (
     <SafeAreaView edges={edges} style={styles.safe}>
+      <AppBackground />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: 20 + insets.bottom + bottomSpace }]}
+          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
@@ -63,7 +56,7 @@ export function Page({
         </ScrollView>
 
         {footer ? (
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: 12 + (edges?.includes('bottom') || !edges ? 0 : insets.bottom) }]}>
             <View style={styles.footerInner}>{footer}</View>
           </View>
         ) : null}
@@ -397,8 +390,8 @@ export const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.xl },
   content: { width: '100%', maxWidth: 480, alignSelf: 'center', gap: space.xl },
   footer: {
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
+    backgroundColor: '#F5F8FA',
+    borderTopWidth: 0,
     borderTopColor: colors.border,
     paddingHorizontal: space.xl,
     paddingTop: space.md,
@@ -413,18 +406,15 @@ export const styles = StyleSheet.create({
   label: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.muted },
 
   card: {
-    backgroundColor: colors.surface,
+    ...softCard,
     padding: space.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
     gap: space.md,
   },
   note: { padding: space.md, borderRadius: 12, backgroundColor: '#EAF0F8' },
 
   button: {
     minHeight: 52,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
     paddingVertical: 14,
     paddingHorizontal: 18,

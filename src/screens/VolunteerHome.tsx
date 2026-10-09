@@ -1,7 +1,6 @@
 import React, { ComponentProps, useCallback } from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +13,8 @@ import {
   useSession,
 } from '../session';
 import { colors, Page, space, styles } from '../components/UI';
+import { HomeHeader } from '../components/AppChrome';
+import { useAppPanels } from '../components/FloatingMenu';
 import { FadeIn } from '../components/Motion';
 import {
   AvailabilityPill,
@@ -24,8 +25,6 @@ import {
   vt,
   volunteerCard,
   VolunteerAction,
-  VolunteerHeader,
-  VolunteerIconButton,
 } from '../components/VolunteerUI';
 
 type Nav = BottomTabNavigationProp<VolunteerTabParamList, 'Hub'>;
@@ -51,8 +50,8 @@ function Tile({
         flex: 1,
         backgroundColor: colors.surface,
         borderColor: vt.blueBorder,
-        borderWidth: 1,
-        borderRadius: 16,
+        borderWidth: 0,
+        borderRadius: 18,
         padding: space.md,
         gap: 6,
       }}
@@ -106,7 +105,6 @@ export default function VolunteerHome() {
   const navigation = useNavigation<Nav>();
   const {
     session,
-    signOut,
     volunteerOnline,
     setVolunteerOnline,
     requests,
@@ -132,32 +130,25 @@ export default function VolunteerHome() {
     navigation.navigate('Deployment');
   }
 
-  function logout() {
-    navigation.getParent<NativeStackNavigationProp<RootStackParamList>>()?.reset({
-      index: 0,
-      routes: [{ name: 'Welcome' }],
-    });
-    signOut();
-  }
+  const { showProfile, showUpdates } = useAppPanels();
 
   const complete = !!active && active.stage >= LAST_STAGE;
   const statusText = active ? 'On deployment' : volunteerOnline ? 'Available' : 'Offline';
 
   return (
-    <Page edges={['top']}>
+    <Page edges={['top']} bottomSpace={90}>
       {/* Header */}
       <FadeIn>
-        <VolunteerHeader title="Volunteer Hub" subtitle={`Hello, ${session?.name ?? 'Volunteer'} · ${completedCount} completed`}
-          action={<VolunteerIconButton icon="log-out-outline" label="Sign out" onPress={logout} />} />
+        <HomeHeader role="Volunteer" onProfile={showProfile} onUpdates={showUpdates} />
       </FadeIn>
 
       {/* Profile */}
       <FadeIn delay={60}>
-        <LinearGradient colors={['#EDF3FF', '#F8FAFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={volunteerCard}>
+        <View style={[volunteerCard, { backgroundColor: '#FFFFFFB8' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
-              <Text style={styles.section}>Ready to help</Text>
-              <Text style={styles.small}>Your deployment profile</Text>
+              <Text style={styles.section}>Hello, {session?.name ?? 'Volunteer'}</Text>
+              <Text style={styles.small}>{completedCount} deployments completed</Text>
             </View>
             <AvailabilityPill online={volunteerOnline} onToggle={() => setVolunteerOnline(!volunteerOnline)} />
           </View>
@@ -174,7 +165,7 @@ export default function VolunteerHome() {
               color={volunteerOnline || active ? colors.blue : colors.muted}
             />
           </View>
-        </LinearGradient>
+        </View>
       </FadeIn>
 
       {/* Requests */}

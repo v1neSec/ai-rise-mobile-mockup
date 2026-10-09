@@ -2,6 +2,7 @@ import React, { ComponentProps, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Action, ChoiceGrid, colors, Page, PickerRow, Stepper, styles, Upload } from '../UI';
+import { softCard } from '../AppChrome';
 
 export const formTheme = {
   accent: colors.blue,
@@ -11,10 +12,7 @@ export const formTheme = {
 };
 
 export const formCard = {
-  backgroundColor: colors.surface,
-  borderColor: formTheme.border,
-  borderWidth: 1,
-  borderRadius: 20,
+  ...softCard,
   padding: 18,
   gap: 16,
 } as const;
@@ -113,13 +111,13 @@ export function FormChoiceGrid({ options, selected, onSelect, multi = false }: C
                 onPress={() => onSelect(option.key)}
                 style={({ pressed }) => ({
                   flex: 1, minHeight: 104, padding: 12, borderRadius: 18, borderWidth: 1.5,
-                  borderColor: checked ? formTheme.accent : formTheme.border,
+                  borderColor: checked ? formTheme.accent : 'transparent',
                   backgroundColor: checked ? formTheme.soft : pressed ? '#F6F9FE' : colors.surface,
                   gap: 10, opacity: pressed ? 0.85 : 1,
                 })}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: checked ? '#DCE9FF' : '#F0F5FC', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={option.icon ?? 'ellipse-outline'} size={22} color={formTheme.accent} />
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: checked ? '#DCE9FF' : '#EAF1F5', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={option.icon ?? 'ellipse-outline'} size={22} color={checked ? formTheme.accent : colors.text} />
                   </View>
                   <Ionicons name={multi ? checked ? 'checkbox' : 'square-outline' : checked ? 'radio-button-on' : 'radio-button-off'} size={20} color={checked ? formTheme.accent : '#A5B5CB'} />
                 </View>

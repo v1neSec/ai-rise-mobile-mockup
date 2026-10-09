@@ -10,7 +10,7 @@ export function ReportSuccess({ title, summary, reference, onBack, onViewStatus 
   return (
     <FormPage edges={['top']} footer={<>
       <FormAction label="View status" onPress={onViewStatus} />
-      <FormAction label="Back to report options" secondary onPress={onBack} />
+      <FormAction label="Back to home" secondary onPress={onBack} />
     </>}>
       <SuccessConfirmation title={title} message="Your submission is ready. View its details and progress in Status." />
       <View style={formCard}>

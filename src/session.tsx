@@ -12,7 +12,7 @@ export type RootStackParamList = {
   VolunteerHome: undefined;
 };
 
-export type TabParamList = { Home: undefined; Report: undefined; Status: undefined };
+export type TabParamList = { Home: undefined; Report: { mode?: 'emergency' | 'supplies' | 'community'; entry?: number } | undefined; Status: undefined };
 export type VolunteerTabParamList = { Hub: undefined; Deployment: undefined };
 
 export const SOS_STEPS = ['Pending', 'Assigned', 'On the way', 'Completed'] as const;
