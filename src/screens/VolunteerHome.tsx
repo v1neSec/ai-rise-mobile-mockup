@@ -1,5 +1,5 @@
-import React, { ComponentProps, useCallback } from 'react';
-import { Text, View } from 'react-native';
+import React, { ComponentProps, useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -26,11 +26,21 @@ import {
   volunteerCard,
   VolunteerAction,
 } from '../components/VolunteerUI';
+import * as Location from 'expo-location';
+import { rescueService } from '../services/rescueService';
+import { supplyService, type BackendSupply } from '../services/supplyService';
+import { driverService } from '../services/driverService';
+import { getApiErrorMessage } from '../api/api';
+import type { Rescue } from '../types/rescue';
 
 type Nav = BottomTabNavigationProp<VolunteerTabParamList, 'Hub'>;
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
-const PROFILE = { vehicle: 'SUV', capacity: '6 persons', location: 'Brgy. San Vicente' };
+const toRescueDeployment = (r: Rescue): Deployment => {
+  const total = r.childrens + r.elderly + r.pwd + r.adults;
+  return { id: `R-${r.id}`, backendId: r.id, kind: 'rescue', title: `Rescue assistance · ${total} ${total === 1 ? 'person' : 'people'}`, location: `${r.address}, ${r.barangay}`, distance: 'Assigned by dispatch', priority: r.medical_assistance || r.flood_level === 'waist_deep_or_higher' ? 'Critical' : 'High', people: `${total} people · ${r.childrens} children, ${r.elderly} elderly`, access: r.flood_level.replace(/_/g, ' '), action: 'Rescuing', briefing: `Rescue request #${r.id}. ${r.medical_assistance ? 'Medical assistance requested. ' : ''}${r.address}.`, tags: [`Barangay: ${r.barangay}`, `Flood: ${r.flood_level.replace(/_/g, ' ')}`], outcome: `Rescue request #${r.id} completed` };
+};
+const toSupplyDeployment = (r: BackendSupply): Deployment => ({ id: `S-${r.id}`, backendId: r.id, kind: 'supply', title: `Supply delivery · ${r.barangay}`, location: `${r.address}, ${r.barangay}`, distance: 'Assigned by dispatch', priority: r.medical_assistance ? 'Critical' : 'High', people: `${r.childrens + r.elderly + r.pwd + r.adults} residents`, access: r.flood_level.replace(/_/g, ' '), action: 'Delivering', briefing: `Supply request #${r.id}. ${r.other_supplies || 'Deliver requested household supplies.'}`, tags: [`Barangay: ${r.barangay}`, `Flood: ${r.flood_level.replace(/_/g, ' ')}`], outcome: `Supply request #${r.id} delivered` });
 
 /* Small tile: icon + label + value. */
 function Tile({
@@ -96,7 +106,7 @@ function RequestCard({ d, index, onAccept }: { d: Deployment; index: number; onA
         <InfoRow icon="people-outline" text={d.people} />
         <InfoRow icon="navigate-outline" text={`Access: ${d.access}`} />
       </View>
-      <SwipeToAccept onAccept={onAccept} />
+      <SwipeToAccept label="Open assigned task" doneLabel="Opened" onAccept={onAccept} />
     </FadeIn>
   );
 }
@@ -112,7 +122,13 @@ export default function VolunteerHome() {
     acceptRequest,
     broadcasts,
     completedCount,
+    setRequests,
   } = useSession();
+  const [driverProfile, setDriverProfile] = useState<{ vehicle_plate: string; location: { lat: number; lng: number } | null; is_available: boolean } | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [reload, setReload] = useState(0);
+  const lastLocation = useRef<{ latitude: number; longitude: number } | null>(null);
 
   /* Swiping right from the screen edge triggers the stack's "go back" gesture,
    * which is what sent you to the previous screen while using Swipe to accept.
@@ -125,9 +141,54 @@ export default function VolunteerHome() {
     }, [navigation]),
   );
 
+  useFocusEffect(useCallback(() => {
+    void reload;
+    if (!session?.userId) return;
+    let alive = true;
+    setLoadingTasks(true); setLoadError('');
+    Promise.all([rescueService.getAssignedRescues(), supplyService.getAssignedDeliveries(), driverService.getDriver(session.userId)])
+      .then(([rescueItems, supplyItems, profile]) => {
+        if (!alive) return;
+        setRequests([...rescueItems.map(toRescueDeployment), ...supplyItems.map(toSupplyDeployment)]);
+        setDriverProfile({ vehicle_plate: profile.driver_profile.vehicle_plate, location: profile.driver_profile.location, is_available: profile.driver_profile.is_available });
+        setVolunteerOnline(profile.driver_profile.is_available);
+      })
+      .catch((cause) => { if (alive) setLoadError(getApiErrorMessage(cause)); })
+      .finally(() => { if (alive) setLoadingTasks(false); });
+    return () => { alive = false; };
+  }, [session?.userId, reload, setRequests, setVolunteerOnline]));
+
+  useEffect(() => {
+    if (!volunteerOnline || !session?.userId) return;
+    let alive = true;
+    let subscription: Location.LocationSubscription | undefined;
+    (async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (!alive || permission.status !== 'granted') return;
+        subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 30000, distanceInterval: 50 }, (position) => {
+          const { latitude, longitude } = position.coords; const prior = lastLocation.current;
+          if (prior && Math.abs(prior.latitude - latitude) < 0.0001 && Math.abs(prior.longitude - longitude) < 0.0001) return;
+          lastLocation.current = { latitude, longitude };
+          void driverService.updateDriver(session.userId, { driver_profile: { location: { lat: latitude, lng: longitude } } }).catch(() => {});
+          setDriverProfile((current) => current ? { ...current, location: { lat: latitude, lng: longitude } } : current);
+        });
+      } catch { /* GPS reporting is best-effort. */ }
+    })();
+    return () => { alive = false; subscription?.remove(); };
+  }, [volunteerOnline, session?.userId]);
+
   function accept(id: string) {
     acceptRequest(id);
     navigation.navigate('Deployment');
+  }
+
+  async function toggleAvailability() {
+    if (!session?.userId || !driverProfile) { setVolunteerOnline(!volunteerOnline); return; }
+    const next = !volunteerOnline;
+    setVolunteerOnline(next); setDriverProfile({ ...driverProfile, is_available: next });
+    try { await driverService.updateDriver(session.userId, { driver_profile: { is_available: next } }); }
+    catch (cause) { setVolunteerOnline(!next); setDriverProfile({ ...driverProfile, is_available: !next }); Alert.alert('Availability not updated', getApiErrorMessage(cause)); }
   }
 
   const { showProfile, showUpdates } = useAppPanels();
@@ -150,14 +211,14 @@ export default function VolunteerHome() {
               <Text style={styles.section}>Hello, {session?.name ?? 'Volunteer'}</Text>
               <Text style={styles.small}>{completedCount} deployments completed</Text>
             </View>
-            <AvailabilityPill online={volunteerOnline} onToggle={() => setVolunteerOnline(!volunteerOnline)} />
+            <AvailabilityPill online={volunteerOnline} onToggle={() => { void toggleAvailability(); }} />
           </View>
           <View style={{ flexDirection: 'row', gap: space.md }}>
-            <Tile icon="car-outline" label="Vehicle" value={PROFILE.vehicle} />
-            <Tile icon="people-outline" label="Capacity" value={PROFILE.capacity} />
+            <Tile icon="car-outline" label="Vehicle plate" value={driverProfile?.vehicle_plate || 'Loading profile'} />
+            <Tile icon="people-outline" label="Assigned tasks" value={String(requests.length)} />
           </View>
           <View style={{ flexDirection: 'row', gap: space.md }}>
-            <Tile icon="location-outline" label="Location" value={PROFILE.location} />
+            <Tile icon="location-outline" label="Live location" value={driverProfile?.location ? `${driverProfile.location.lat.toFixed(4)}, ${driverProfile.location.lng.toFixed(4)}` : 'Waiting for GPS'} />
             <Tile
               icon={active ? 'navigate-outline' : volunteerOnline ? 'radio-button-on' : 'moon-outline'}
               label="Status"
@@ -189,6 +250,8 @@ export default function VolunteerHome() {
           )}
         </View>
 
+        {!!loadError && <View style={volunteerCard}><Text style={{ color: colors.danger }}>{loadError}</Text><VolunteerAction label="Retry assignments" secondary onPress={() => setReload((value) => value + 1)} /></View>}
+        {loadingTasks && <Text style={styles.small}>Loading assigned tasks…</Text>}
         {active ? (
           <FadeIn style={[volunteerCard, { backgroundColor: vt.blueSoft }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
@@ -222,7 +285,7 @@ export default function VolunteerHome() {
             <Ionicons name="checkmark-circle-outline" size={30} color={colors.blue} />
             <Text style={styles.section}>All clear</Text>
             <Text style={[styles.subtitle, { textAlign: 'center' }]}>
-              No requests right now. New ones will appear here.
+              No tasks are assigned right now. The backend assigns available volunteers automatically.
             </Text>
           </FadeIn>
         ) : (
@@ -231,12 +294,12 @@ export default function VolunteerHome() {
       </View>
 
       {/* Broadcast */}
-      <FadeIn delay={120} style={volunteerCard}>
+        <FadeIn delay={120} style={volunteerCard}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Ionicons name="radio-outline" size={20} color={colors.blue} />
           <Text style={styles.section}>Team broadcast</Text>
         </View>
-        {broadcasts.length === 0 && <Text style={styles.subtitle}>No messages from your team yet.</Text>}
+        {broadcasts.length === 0 && <Text style={styles.subtitle}>Team broadcasts aren’t available from the current API.</Text>}
         {broadcasts.slice(0, 5).map((b, i) => (
           <FadeIn
             key={b.id}

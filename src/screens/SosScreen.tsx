@@ -5,6 +5,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import { RootStackParamList, SosRequest, useSession } from '../session';
 import { Action, Choice, ChoiceGrid, colors, Page, space, styles } from '../components/UI';
+import { rescueService } from '../services/rescueService';
+import { getApiErrorMessage } from '../api/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Sos'>;
 type Step = { id: string; title: string; hint?: string; options: Choice[]; multi?: boolean };
@@ -75,17 +77,21 @@ function priorityOf(sel: Record<string, string[]>): SosRequest['priority'] {
   return score >= 6 ? 'Critical' : score >= 4 ? 'High' : 'Medium';
 }
 
-async function getPlace(): Promise<string> {
+async function getPlace(): Promise<{ lat: number; lng: number; address: string }> {
   try {
     const perm = await Location.requestForegroundPermissionsAsync();
-    if (perm.status !== 'granted') return 'Location unavailable';
+    if (perm.status !== 'granted') throw new Error('Allow location access to send an SOS.');
     const pos = await Promise.race([
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
       new Promise<null>((r) => setTimeout(() => r(null), 6000)),
     ]);
-    return pos ? `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}` : 'Location unavailable';
+    if (!pos) throw new Error('Could not get your location. Try again.');
+    const lat = pos.coords.latitude; const lng = pos.coords.longitude;
+    const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng }).catch(() => []);
+    const address = [place?.name, place?.street, place?.district, place?.city].filter(Boolean).join(', ') || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    return { lat, lng, address };
   } catch {
-    return 'Location unavailable';
+    throw new Error('Could not get your location. Try again.');
   }
 }
 
@@ -99,11 +105,12 @@ function Row({ k, v, color = colors.text }: { k: string; v: string; color?: stri
 }
 
 export default function SosScreen({ navigation }: Props) {
-  const { addSos } = useSession();
+  const { session } = useSession();
   const [step, setStep] = useState(0);
   const [sel, setSel] = useState<Record<string, string[]>>({});
   const [phase, setPhase] = useState<'form' | 'sending' | 'done'>('form');
   const [sent, setSent] = useState<SosRequest | null>(null);
+  const [sendError, setSendError] = useState('');
   const sending = useRef(false);
   const progress = useRef(new Animated.Value(0.2)).current;
   const pop = useRef(new Animated.Value(0)).current;
@@ -150,18 +157,25 @@ export default function SosScreen({ navigation }: Props) {
 
   async function send() {
     if (sending.current) return;
+    if (!session) { navigation.navigate('Auth', { role: 'resident', returnTo: 'Sos' }); return; }
     sending.current = true;
     setPhase('sending');
-    const [place] = await Promise.all([getPlace(), new Promise((r) => setTimeout(r, 1800))]);
-    const req = addSos({
-      nature: sel.nature?.[0] ?? 'Other',
-      details: [sel.follow?.[0], sel.water?.[0], sel.access?.[0]].filter(Boolean) as string[],
-      vulnerable: sel.vulnerable ?? [],
-      priority: priorityOf(sel),
-      location: place,
-    });
-    setSent(req);
-    setPhase('done');
+    setSendError('');
+    try {
+      const place = await getPlace();
+      const vulnerable = sel.vulnerable ?? [];
+      const result = await rescueService.createRescue({
+        address: place.address, location: { lat: place.lat, lng: place.lng },
+        childrens: vulnerable.includes('Children / infants') ? 1 : 0,
+        elderly: vulnerable.includes('Elderly') ? 1 : 0,
+        pwd: vulnerable.includes('Persons with disability') ? 1 : 0,
+        adults: vulnerable.includes('Pregnant') || vulnerable.includes('None') || vulnerable.length === 0 ? 1 : 0,
+        flood_level: ({ 'No flooding yet': 'no_flooding', 'Ankle-deep': 'ankle_deep', 'Knee-deep': 'knee_deep', 'Waist-deep or higher': 'waist_deep_or_higher' } as Record<string, 'no_flooding' | 'ankle_deep' | 'knee_deep' | 'waist_deep_or_higher'>)[sel.water?.[0] ?? 'No flooding yet'],
+        medical_assistance: sel.nature?.[0] === 'Medical emergency',
+      });
+      const req: SosRequest = { id: String(result.id), createdAt: result.created_at, nature: sel.nature?.[0] ?? 'Emergency', details: [sel.follow?.[0], sel.water?.[0], sel.access?.[0]].filter(Boolean) as string[], vulnerable, priority: priorityOf(sel), location: result.address, status: result.status === 'rescued' ? 'Completed' : result.rescuer ? 'Assigned' : 'Pending' };
+      setSent(req); setPhase('done');
+    } catch (cause) { setSendError(getApiErrorMessage(cause)); setPhase('form'); sending.current = false; }
   }
 
   if (phase === 'sending') {
@@ -204,8 +218,8 @@ export default function SosScreen({ navigation }: Props) {
         </View>
         <View style={styles.card}>
           <Row k="Reference" v={sent.id} />
-          <Row k="AI priority" v={sent.priority} color={sent.priority === 'Critical' ? colors.danger : colors.text} />
-          <Row k="Estimated arrival" v="12–18 min" />
+          <Row k="Request status" v={sent.status} color={colors.blue} />
+          <Row k="Responder" v="Volunteer assignment is automatic" />
           <Row k="Location" v={sent.location} />
         </View>
       </Page>
@@ -263,6 +277,7 @@ export default function SosScreen({ navigation }: Props) {
         tint={colors.sos}
         multi={cur.multi}
       />
+      {!!sendError && <Text accessibilityLiveRegion="polite" style={{ color: colors.danger }}>{sendError}</Text>}
     </Page>
   );
 }

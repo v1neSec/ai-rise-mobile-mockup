@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Text, View } from 'react-native';
-import { useSession } from '../../session';
 import { SUPPLY_OPTIONS, SupplyFloodLevel, SupplyNeed, SupplyRequest } from '../../types/supply';
 import { MockLocationPin, MockPin } from './MockLocationPin';
 import { ReportSuccess } from './ReportSuccess';
@@ -8,6 +7,9 @@ import { Choice, colors, space, styles } from '../UI';
 import { FormAction as Action, FormChoiceGrid as ChoiceGrid, FormField as Field, FormPage as Page, FormStepper as Stepper, FormUpload as Upload, FormProgress, FormError, formCard, formTheme } from './ReportFormUI';
 import { FadeIn } from '../Motion';
 import { ReportFormHeader } from './ReportFormHeader';
+import { supplyService } from '../../services/supplyService';
+import { getApiErrorMessage } from '../../api/api';
+import { appendLocalImage } from '../../services/upload';
 
 const NEEDS: Choice[] = [...SUPPLY_OPTIONS, { key: 'other', label: 'Other supplies', icon: 'ellipsis-horizontal-circle-outline' }];
 const GROUPS = [
@@ -32,7 +34,6 @@ const STEPS = [
 ];
 
 export function SupplyRequestForm({ onBack, onViewStatus }: { onBack: () => void; onViewStatus: () => void }) {
-  const { addSupplyRequest } = useSession();
   const [step, setStep] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [other, setOther] = useState('');
@@ -48,6 +49,7 @@ export function SupplyRequestForm({ onBack, onViewStatus }: { onBack: () => void
   const [evidence, setEvidence] = useState('');
   const [error, setError] = useState('');
   const [sent, setSent] = useState<SupplyRequest | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const submitted = useRef(false);
   const total = counts.childrens + counts.elderly + counts.pwd + counts.adults;
   const normalizedPhone = phone.replace(/[\s()-]/g, '');
@@ -68,7 +70,7 @@ export function SupplyRequestForm({ onBack, onViewStatus }: { onBack: () => void
     return '';
   }
 
-  function next() {
+  async function next() {
     const message = step === STEPS.length - 1
       ? STEPS.map((_, index) => validate(index)).find(Boolean) || '' : validate(step);
     if (message) { setError(message); return; }
@@ -76,14 +78,22 @@ export function SupplyRequestForm({ onBack, onViewStatus }: { onBack: () => void
     if (step < STEPS.length - 1) { setStep(step + 1); return; }
     if (submitted.current || !flood || medical === null || !pin) return;
     submitted.current = true;
+    setSubmitting(true);
     const flags = Object.fromEntries(SUPPLY_OPTIONS.map((option) => [option.key, selected.includes(option.key)])) as Record<SupplyNeed, boolean>;
-    setSent(addSupplyRequest({
+    const payload = {
       ...flags, ...counts,
-      barangay: barangay.trim(), address: address.trim(), contact_number: normalizedPhone,
-      location: { latitude: pin.latitude, longitude: pin.longitude },
-      evidence: evidence || null, flood_level: flood,
+      address: address.trim(), contact_number: normalizedPhone,
+      location: { lat: pin.latitude, lng: pin.longitude },
+      flood_level: flood,
       other_supplies: other.trim(), medical_assistance: medical,
-    }));
+    };
+    try {
+      let body: FormData | typeof payload = payload;
+      if (evidence) { const form = new FormData(); Object.entries(payload).forEach(([key, value]) => form.append(key, key === 'location' ? JSON.stringify(value) : String(value))); appendLocalImage(form, 'evidence', evidence); body = form; }
+      const result = await supplyService.createRequest(body);
+      setSent({ ...(result as unknown as SupplyRequest), id: String(result.id), barangay: result.barangay, location: { latitude: result.location.lat, longitude: result.location.lng }, evidence: result.evidence });
+    } catch (cause) { submitted.current = false; setError(getApiErrorMessage(cause)); }
+    finally { setSubmitting(false); }
   }
 
   if (sent) return <ReportSuccess title="Supply request sent" reference={sent.id} summary={`${total} people · ${sent.barangay}`} onBack={onBack} onViewStatus={onViewStatus} />;
@@ -92,9 +102,9 @@ export function SupplyRequestForm({ onBack, onViewStatus }: { onBack: () => void
   return (
     <Page pageKey={step} edges={['top']} footer={<>
       <FormError message={error} />
-      <Action label={step === STEPS.length - 1 ? 'Request Supplies' : 'Continue'} onPress={next} />
+      <Action label={submitting ? 'Sending request…' : step === STEPS.length - 1 ? 'Request Supplies' : 'Continue'} busy={submitting} onPress={() => { void next(); }} />
     </>}>
-      <ReportFormHeader title="Request Supplies"
+      <ReportFormHeader title="Request Supplies" disabled={submitting}
         onBack={() => { if (step > 0) { setStep(step - 1); setError(''); } else onBack(); }} />
       <FormProgress step={step} total={STEPS.length} title={STEPS[step].title} hint={STEPS[step].hint} />
       <FadeIn key={step} style={{ gap: space.xl }}>

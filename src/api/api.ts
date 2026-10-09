@@ -33,23 +33,44 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-let isHandling401 = false;
+let refreshInFlight: Promise<string> | null = null;
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const config = error.config;
-    if (error.response?.status === 401 && config && !isPublicRequest(config) && !isHandling401) {
-      isHandling401 = true;
+    if (error.response?.status === 401 && config && !isPublicRequest(config)) {
+      if (config.headers.get('X-Auth-Retry')) {
+        await tokenStorage.clearTokens();
+        onUnauthorizedCallback();
+        return Promise.reject(error);
+      }
       try {
         const currentToken = await tokenStorage.getAccessToken();
-        // A delayed response from an old session must not log out a new one.
-        if (currentToken && config.headers.Authorization === `Bearer ${currentToken}`) {
-          try { await tokenStorage.clearTokens(); }
-          finally { onUnauthorizedCallback(); }
+        const refresh = await tokenStorage.getRefreshToken();
+        if (currentToken && config.headers.Authorization !== `Bearer ${currentToken}`) {
+          // Another request already rotated the token; replay this request with the new access token.
+          config.headers.set('Authorization', `Bearer ${currentToken}`);
+          config.headers.set('X-Auth-Retry', '1');
+          return api.request(config);
         }
+        if (currentToken && refresh) {
+          if (!refreshInFlight) {
+            refreshInFlight = api.post<{ access: string; refresh?: string }>('/token/refresh/', { refresh })
+              .then(async ({ data }) => {
+                await tokenStorage.saveTokens({ access: data.access, refresh: data.refresh ?? refresh });
+                return data.access;
+              }).finally(() => { refreshInFlight = null; });
+          }
+          const access = await refreshInFlight;
+          config.headers.set('Authorization', `Bearer ${access}`);
+          config.headers.set('X-Auth-Retry', '1');
+          return api.request(config);
+        }
+        throw new Error('Authentication credentials are missing or expired.');
       } catch {
-        // Preserve the original request error for the screen's error handler.
-      } finally { isHandling401 = false; }
+        await tokenStorage.clearTokens();
+        onUnauthorizedCallback();
+      }
     }
     return Promise.reject(error);
   },

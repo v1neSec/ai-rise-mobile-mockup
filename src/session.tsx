@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { SupplyRequest, SupplyRequestDetails } from './types/supply';
+import { setUnauthorizedCallback } from './api/api';
+import { tokenStorage } from './api/tokenStorage';
 
 export type Role = 'resident' | 'volunteer';
-export type Session = { role: Role; name: string };
+export type Session = { role: Role; name: string; userId: number; username: string };
 
 export type RootStackParamList = {
   Welcome: undefined;
   ResidentTabs: { screen?: 'Home' | 'Report' | 'Status' } | undefined;
-  Auth: { role: Role; destination?: 'Report' };
+  Auth: { role: Role; destination?: 'Report'; reportMode?: 'emergency' | 'supplies' | 'community'; returnTo?: 'Sos' };
   Sos: undefined;
   VolunteerHome: undefined;
 };
@@ -43,6 +45,8 @@ export type CommunityReport = {
 /* ---------- Volunteer types ---------- */
 export type Deployment = {
   id: string;
+  backendId?: number;
+  kind?: 'rescue' | 'supply';
   title: string;
   location: string;
   distance: string;
@@ -62,42 +66,6 @@ export const stepLabels = (d: Deployment) => ['Accepted', 'Arrived', d.action, '
 
 export type Broadcast = { id: string; message: string; from: string; time: string; urgent?: boolean };
 
-const SEED_REQUESTS: Deployment[] = [
-  {
-    id: 'D-001',
-    title: 'Evacuate 12 Residents',
-    location: 'Purok 3, Sto. Niño',
-    distance: '1.2 km',
-    priority: 'Critical',
-    people: '12 residents · 3 elderly, 2 children',
-    access: 'Boat required (flooded roads)',
-    action: 'Rescuing',
-    briefing:
-      'Twelve residents including 3 elderly and 2 children are stranded in Purok 3 due to flash flooding. Water level is about 1.2 m. Use rescue boat RB-02. Coordinator: Sgt. Reyes.',
-    tags: ['Team: DeviAnts', 'Vehicle: RB-02'],
-    outcome: '12 residents successfully evacuated',
-  },
-  {
-    id: 'D-002',
-    title: 'Deliver Relief Packs',
-    location: 'Evacuation Center A',
-    distance: '0.6 km',
-    priority: 'High',
-    people: '40 family packs',
-    access: 'Road passable',
-    action: 'Delivering',
-    briefing:
-      'Deliver 40 relief packs from the barangay hall to Evacuation Center A. Hand them to the center coordinator and get a signed receipt.',
-    tags: ['Team: DeviAnts', 'Cargo: 40 packs'],
-    outcome: '40 relief packs delivered',
-  },
-];
-
-const SEED_BROADCASTS: Broadcast[] = [
-  { id: 'B-1', message: 'Medical team needed at Evacuation Center A.', from: 'Command', time: '13:00', urgent: true },
-  { id: 'B-2', message: 'Road to Purok 3 is passable by boat only.', from: 'Dispatch', time: '12:40' },
-  { id: 'B-3', message: 'Relief packs arrive at Evacuation Center A by 2 PM.', from: 'Logistics', time: '12:10' },
-];
 
 export const formatTime = (iso: string) =>
   new Date(iso).toLocaleString([], {
@@ -125,6 +93,7 @@ type Ctx = {
   volunteerOnline: boolean;
   setVolunteerOnline: (v: boolean) => void;
   requests: Deployment[];
+  setRequests: (requests: Deployment[]) => void;
   active: ActiveDeployment | null;
   acceptRequest: (id: string) => void;
   advanceDeployment: () => void;
@@ -144,14 +113,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [supplies, setSupplies] = useState<SupplyRequest[]>([]);
 
   const [volunteerOnline, setVolunteerOnline] = useState(true);
-  const [requests, setRequests] = useState<Deployment[]>(SEED_REQUESTS);
+  const [requests, setRequests] = useState<Deployment[]>([]);
   const [active, setActive] = useState<ActiveDeployment | null>(null);
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>(SEED_BROADCASTS);
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [completedCount, setCompletedCount] = useState(0);
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => {
+    const pendingTimers = timers.current;
+    setUnauthorizedCallback(() => setSession(null));
+    return () => pendingTimers.forEach(clearTimeout);
+  }, []);
 
   function setStatus(id: string, status: SosStatus) {
     setSos((list) => list.map((r) => (r.id === id ? { ...r, status } : r)));
@@ -244,7 +217,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       value={{
         session,
         signIn: setSession,
-        signOut: () => setSession(null),
+        signOut: () => { void tokenStorage.clearTokens(); setSession(null); },
         safeAt,
         markSafe: () => setSafeAt(new Date().toISOString()),
         clearSafe: () => setSafeAt(null),
@@ -257,6 +230,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         volunteerOnline,
         setVolunteerOnline,
         requests,
+        setRequests,
         active,
         acceptRequest,
         advanceDeployment,

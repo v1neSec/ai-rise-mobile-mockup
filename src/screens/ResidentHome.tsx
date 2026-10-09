@@ -1,4 +1,4 @@
-import React, { ComponentProps, useRef, useState } from 'react';
+import React, { ComponentProps, useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Easing, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,9 @@ import { colors, space, styles } from '../components/UI';
 import { AppBackground, HomeHeader } from '../components/AppChrome';
 import { useAppPanels } from '../components/FloatingMenu';
 import { Press, Rings } from '../components/Motion';
+import { dashboardService } from '../services/dashboardService';
+import type { FloodPrediction } from '../types/dashboard';
+import * as Location from 'expo-location';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -268,6 +271,30 @@ export default function ResidentHome() {
   const compact = contentHeight > 0 && contentHeight < 650;
   const tight = contentHeight > 0 && contentHeight < 600;
   const { showProfile, showUpdates } = useAppPanels();
+  const [flood, setFlood] = useState<FloodPrediction | null>(null);
+  const [floodUnavailable, setFloodUnavailable] = useState(false);
+  const [weeklySummary, setWeeklySummary] = useState('');
+  useEffect(() => {
+    let alive = true;
+    dashboardService.getWeeklyFloodInsights().then((insights) => {
+      const summary = typeof insights.summary === 'string' ? insights.summary : Array.isArray(insights.insights) && typeof insights.insights[0] === 'string' ? insights.insights[0] : '';
+      if (alive) setWeeklySummary(summary);
+    }).catch(() => {});
+    dashboardService.getAllFloodPredictions().then(async (response) => {
+      if (!alive) return;
+      const predictions = [...response.predictions].sort((a, b) => b.flood_probability_pct - a.flood_probability_pct);
+      let selected = predictions[0] ?? null;
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (permission.status === 'granted') {
+          const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          selected = await dashboardService.getFloodPredictionByLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        }
+      } catch { /* Use the public all-barangay forecast if local prediction is unavailable. */ }
+      if (alive) setFlood(selected);
+    }).catch(() => { if (alive) setFloodUnavailable(true); });
+    return () => { alive = false; };
+  }, []);
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -292,16 +319,16 @@ export default function ResidentHome() {
           {!tight && <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <Ionicons name="rainy-outline" size={16} color={colors.danger} />
             <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.danger }}>
-              Flood warning · Apalit
+              {flood ? `Flood outlook · ${flood.barangay}` : 'Flood outlook'}
             </Text>
           </View>}
           <Text accessibilityLabel="Flood warning in Apalit, Typhoon Signal Number 2" style={{ fontSize: compact ? 18 : 20, lineHeight: 24, fontWeight: '800', color: colors.text }}>
-            Typhoon Signal No. 2
+            {flood?.predicted_flood_label ?? (floodUnavailable ? 'Forecast unavailable' : 'Loading forecast…')}
           </Text>
           {tight ? (
             <View style={{ flexDirection: 'row', gap: space.md }}>
-              <Text style={{ flex: 1, fontSize: 12, lineHeight: 18, color: colors.danger, fontWeight: '700' }}>Water · 8.2 m ↑</Text>
-              <Text style={{ flex: 1, fontSize: 12, lineHeight: 18, color: colors.text, fontWeight: '700' }}>Wind · 120 km/h</Text>
+              <Text style={{ flex: 1, fontSize: 12, lineHeight: 18, color: colors.danger, fontWeight: '700' }}>Flood chance · {flood ? `${flood.flood_probability_pct}%` : '—'}</Text>
+              <Text style={{ flex: 1, fontSize: 12, lineHeight: 18, color: colors.text, fontWeight: '700' }}>Rain · {flood?.predicted_tomorrow_rainfall_mm ?? '—'} mm</Text>
             </View>
           ) : <View
             style={{
@@ -312,9 +339,9 @@ export default function ResidentHome() {
               paddingTop: 4,
             }}
           >
-            <Stat label="Water level" value="8.2 m" note="Rising" compact={compact} />
+            <Stat label="Flood probability" value={flood ? `${flood.flood_probability_pct}%` : '—'} note={flood?.used_live_weather ? 'Live weather' : 'Forecast'} compact={compact} />
             <View style={{ width: 1, backgroundColor: colors.border }} />
-            <Stat label="Wind speed" value="120 km/h" note="Strong" compact={compact} />
+            <Stat label="Tomorrow rainfall" value={flood?.predicted_tomorrow_rainfall_mm != null ? `${flood.predicted_tomorrow_rainfall_mm} mm` : '—'} note="Prediction" compact={compact} />
           </View>}
         </View>
 
@@ -323,17 +350,17 @@ export default function ResidentHome() {
           <InfoCard
             icon="notifications-outline"
             title="Latest alert"
-            body="Apalit River rising. Avoid the banks."
-            meta="9:45 PM"
+            body={weeklySummary || (floodUnavailable ? 'Flood outlook is temporarily unavailable.' : flood ? `${flood.predicted_flood_label} · ${flood.flood_probability_pct}% forecast chance` : 'Loading flood outlook…')}
+            meta={weeklySummary ? 'Weekly AI outlook' : flood ? `Forecast · ${flood.barangay}` : 'Dashboard forecast'}
             compact={compact}
             tight={tight}
           />
           <InfoCard
             icon="location-outline"
             title="Flood risk"
-            body="High risk in your area"
+            body={flood ? `${flood.predicted_flood_label} · ${flood.flood_probability_pct}%` : 'Forecast unavailable'}
             bodyColor={colors.danger}
-            meta="Brgy. Apalit · Low-lying"
+            meta={flood?.barangay ?? 'Barangay data'}
             compact={compact}
             tight={tight}
           />

@@ -24,7 +24,7 @@ export const dashboardService = {
   },
 
   getFloodPredictionByLocation: async (location: Coordinates, model: PredictionModel = 'rf') => {
-    const response = await api.get<FloodPrediction>('/dashboard/predict/by-location/', { params: { ...location, model } });
+    const response = await api.get<FloodPrediction>('/dashboard/predict/by-location/', { params: { lat: location.lat, lng: location.lng, model } });
     return response.data;
   },
 

@@ -1,29 +1,31 @@
 import React, { useCallback, useState } from "react";
-import { Alert, BackHandler, Pressable, Text, View } from "react-native";
+import { Alert, BackHandler, Image, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
 import { RootStackParamList, useSession } from "../session";
 import { Action, colors, Field, Page, styles, Upload } from "../components/UI";
+import { authService } from "../services/authService";
+import { passengerService } from "../services/passengerService";
+import { driverService } from "../services/driverService";
+import { getApiErrorMessage } from "../api/api";
+import { appendLocalImage } from "../services/upload";
+import type { Driver, Passenger } from "../types/user";
+import { tokenStorage } from "../api/tokenStorage";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Auth">;
 
-const demoAccounts = {
-  resident: {
-    identifier: "resident@airise.app",
-    password: "Demo123!",
-    name: "Juan dela Cruz",
-  },
-  volunteer: {
-    identifier: "volunteer@airise.app",
-    password: "Demo123!",
-    name: "Alex Santos",
-  },
-};
+function tokenClaims(token: string): { user_id: number; username: string; role: string } {
+  const payload = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
+  if (!payload) throw new Error('The server returned an invalid login token.');
+  const claims = JSON.parse(globalThis.atob(payload)) as { user_id?: number; username?: string; role?: string };
+  if (!claims.user_id || !claims.username || !claims.role) throw new Error('The login token is missing account details.');
+  return { user_id: claims.user_id, username: claims.username, role: claims.role };
+}
 
 export default function AuthScreen({ route, navigation }: Props) {
-  const { role, destination } = route.params;
+  const { role, destination, reportMode, returnTo } = route.params;
   const { signIn } = useSession();
 
   const volunteer = role === "volunteer";
@@ -32,6 +34,7 @@ export default function AuthScreen({ route, navigation }: Props) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const [hasVehicle, setHasVehicle] = useState(true);
   const [location, setLocation] = useState<{
@@ -45,6 +48,8 @@ export default function AuthScreen({ route, navigation }: Props) {
     phone: "",
     barangay: "",
     username: "",
+    emergencyName: "",
+    emergencyPhone: "",
     password: "",
     confirm: "",
     profile: "",
@@ -94,14 +99,16 @@ export default function AuthScreen({ route, navigation }: Props) {
     setError("");
   }
 
-  function complete(name: string) {
-    signIn({ role, name });
+  function complete(name: string, userId: number, username: string) {
+    signIn({ role, name, userId, username });
 
     if (volunteer) {
       navigation.reset({
         index: 1,
         routes: [{ name: "Welcome" }, { name: "VolunteerHome" }],
       });
+    } else if (returnTo === 'Sos') {
+      navigation.goBack();
     } else {
       navigation.reset({
         index: 1,
@@ -109,33 +116,37 @@ export default function AuthScreen({ route, navigation }: Props) {
           { name: "Welcome" },
           {
             name: "ResidentTabs",
-            params: { screen: destination === "Report" ? "Report" : "Home" },
+            params: { screen: destination === "Report" ? "Report" : "Home", params: destination === "Report" ? { mode: reportMode, entry: Date.now() } : undefined },
           },
         ],
       });
     }
   }
 
-  function submitSignIn() {
-    const demo = demoAccounts[role];
-
-    if (
-      form.identifier.trim().toLowerCase() !== demo.identifier ||
-      form.password !== demo.password
-    ) {
-      setError("The email or password is incorrect. Please try again.");
-      return;
-    }
-
-    complete(demo.name);
+  async function submitSignIn() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const tokens = await authService.login({ username: form.identifier.trim(), password: form.password });
+      const claims = tokenClaims(tokens.access);
+      const expectedRole = volunteer ? 'driver' : 'passenger';
+      if (claims.role !== expectedRole) {
+        await tokenStorage.clearTokens();
+        throw new Error(`This account is registered as ${claims.role}, not ${expectedRole}.`);
+      }
+      const profile = volunteer ? await driverService.getDriver(claims.user_id) : await passengerService.getPassenger(claims.user_id);
+      const name = `${profile.first_name} ${profile.last_name}`.trim() || profile.username;
+      complete(name, claims.user_id, claims.username);
+    } catch (cause) { setError(getApiErrorMessage(cause)); }
+    finally { setBusy(false); }
   }
 
   function validateAccount() {
     if (
       !form.name.trim() ||
       !form.phone.trim() ||
-      (!volunteer && !form.barangay.trim()) ||
-      (volunteer && !form.username.trim())
+      !form.username.trim() ||
+      (!volunteer && (!form.barangay.trim() || !form.emergencyName.trim() || !form.emergencyPhone.trim()))
     ) {
       setError("Please complete all required account fields.");
       return false;
@@ -188,7 +199,7 @@ export default function AuthScreen({ route, navigation }: Props) {
     }
   }
 
-  function finishRegistration() {
+  async function finishRegistration() {
     Alert.alert(
       "Confirm registration",
       "Check your details before continuing to your account.",
@@ -196,10 +207,40 @@ export default function AuthScreen({ route, navigation }: Props) {
         { text: "Keep editing", style: "cancel" },
         {
           text: "Continue",
-          onPress: () => complete(form.name.trim()),
+          onPress: () => { void registerAccount(); },
         },
       ],
     );
+  }
+
+  async function registerAccount() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const names = form.name.trim().split(/\s+/); const first_name = names.shift() || ''; const last_name = names.join(' ') || first_name;
+      let profile: Passenger | Driver;
+      if (volunteer) {
+        const data = new FormData();
+        data.append('username', form.username.trim()); data.append('first_name', first_name); data.append('last_name', last_name); data.append('password', form.password);
+        data.append('driver_profile.address', form.address.trim()); data.append('driver_profile.contact_number', form.phone.replace(/[\s()-]/g, ''));
+        data.append('driver_profile.vehicle_plate', form.plate.trim().toUpperCase());
+        if (location) data.append('driver_profile.location', JSON.stringify({ lat: location.latitude, lng: location.longitude }));
+        appendLocalImage(data, 'driver_profile.profile_picture', form.profile); appendLocalImage(data, 'driver_profile.vehicle_front_picture', form.front); appendLocalImage(data, 'driver_profile.vehicle_back_picture', form.back);
+        profile = await driverService.register(data);
+      } else {
+        const data = new FormData();
+        const username = form.username.trim() || form.identifier.trim();
+        data.append('username', username); data.append('first_name', first_name); data.append('last_name', last_name); data.append('password', form.password);
+        data.append('passenger_profile.address', form.barangay.trim()); data.append('passenger_profile.contact_number', form.phone.replace(/[\s()-]/g, ''));
+        data.append('passenger_profile.emergency_contact_name', form.emergencyName.trim()); data.append('passenger_profile.emergency_contact_number', form.emergencyPhone.replace(/[\s()-]/g, ''));
+        appendLocalImage(data, 'passenger_profile.profile_picture', form.profile);
+        profile = await passengerService.register(data);
+      }
+      await authService.login({ username: profile.username, password: form.password });
+      const userId = profile.id;
+      complete(`${profile.first_name} ${profile.last_name}`.trim(), userId, profile.username);
+    } catch (cause) { setError(getApiErrorMessage(cause)); }
+    finally { setBusy(false); }
   }
 
   function submitRegistration() {
@@ -241,6 +282,11 @@ export default function AuthScreen({ route, navigation }: Props) {
       return;
     }
 
+    if (!hasVehicle) {
+      setError('The backend registration contract requires a unique vehicle plate. Volunteer registration without a vehicle is not supported yet.');
+      return;
+    }
+
     finishRegistration();
   }
 
@@ -276,11 +322,7 @@ export default function AuthScreen({ route, navigation }: Props) {
             alignItems: "center",
           }}
         >
-          <Ionicons
-            name={volunteer ? "shield-checkmark-outline" : "pulse"}
-            size={32}
-            color={accent}
-          />
+          <Image source={require('../../assets/images/agap-ai-logo.png')} accessibilityLabel="Agap-AI logo" resizeMode="contain" style={{ width: 54, height: 62 }} />
         </View>
 
         <Text style={[styles.title, { fontSize: 27 }]}>
@@ -360,12 +402,12 @@ export default function AuthScreen({ route, navigation }: Props) {
         {!registering && (
           <>
             <Field
-              label="EMAIL"
+              label="USERNAME"
               value={form.identifier}
               onChangeText={(value) => update("identifier", value)}
-              placeholder={demoAccounts[role].identifier}
-              keyboardType="email-address"
-              autoComplete="email"
+              placeholder="Your account username"
+              autoCapitalize="none"
+              autoComplete="username"
             />
             <Field
               label="PASSWORD"
@@ -387,6 +429,7 @@ export default function AuthScreen({ route, navigation }: Props) {
                 onChange={(value) => update("profile", value)}
               />
             )}
+            {!volunteer && <Upload label="Profile photo · Optional" uri={form.profile} onChange={(value) => update("profile", value)} />}
 
             <Field
               label="FULL NAME *"
@@ -397,14 +440,7 @@ export default function AuthScreen({ route, navigation }: Props) {
               autoComplete="name"
             />
 
-            {volunteer && (
-              <Field
-                label="USERNAME *"
-                value={form.username}
-                onChangeText={(value) => update("username", value)}
-                placeholder="Choose your username"
-              />
-            )}
+            <Field label="USERNAME *" value={form.username} onChangeText={(value) => update("username", value)} placeholder="Choose your username" autoCapitalize="none" />
 
             <Field
               label="PHONE NUMBER *"
@@ -424,6 +460,10 @@ export default function AuthScreen({ route, navigation }: Props) {
                 autoCapitalize="words"
               />
             )}
+            {!volunteer && <>
+              <Field label="EMERGENCY CONTACT NAME *" value={form.emergencyName} onChangeText={(value) => update("emergencyName", value)} placeholder="Contact person" autoCapitalize="words" />
+              <Field label="EMERGENCY CONTACT NUMBER *" value={form.emergencyPhone} onChangeText={(value) => update("emergencyPhone", value)} placeholder="09XXXXXXXXX" keyboardType="phone-pad" />
+            </>}
 
             <Field
               label="PASSWORD *"
@@ -581,7 +621,7 @@ export default function AuthScreen({ route, navigation }: Props) {
         )}
 
         <Action
-          label={
+          label={busy ? "Please wait…" :
             !registering
               ? "Sign in"
               : volunteer && step < 2
@@ -589,6 +629,7 @@ export default function AuthScreen({ route, navigation }: Props) {
                 : "Create account"
           }
           color={accent}
+          disabled={busy}
           onPress={registering ? submitRegistration : submitSignIn}
         />
 

@@ -16,5 +16,5 @@ export type AccountPayload = { username: string; password: string; first_name?: 
 export type PassengerPayload = AccountPayload & { passenger_profile: Omit<PassengerProfile, 'profile_picture'> };
 export type DriverPayload = AccountPayload & { driver_profile: Pick<DriverProfile, 'address' | 'contact_number' | 'vehicle_plate'> & { location?: Coordinates | null } };
 export type PassengerUpdatePayload = Partial<AccountPayload> & { passenger_profile?: Partial<PassengerPayload['passenger_profile']> };
-export type DriverUpdatePayload = Partial<AccountPayload> & { driver_profile?: Partial<DriverPayload['driver_profile']> };
+export type DriverUpdatePayload = Partial<AccountPayload> & { driver_profile?: Partial<DriverPayload['driver_profile']> & { is_available?: boolean } };
 export type DriverApprovalResponse = { message?: string; detail?: string; driver_id?: number; status: 'ACTIVE' };

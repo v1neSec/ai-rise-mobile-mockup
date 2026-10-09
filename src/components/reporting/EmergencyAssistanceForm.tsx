@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SosRequest, useSession } from '../../session';
+import { SosRequest } from '../../session';
+import { rescueService } from '../../services/rescueService';
+import { getApiErrorMessage } from '../../api/api';
 import { MockLocationPin, MockPin } from './MockLocationPin';
 import { ReportSuccess } from './ReportSuccess';
 import { colors, space, styles } from '../UI';
@@ -17,15 +19,15 @@ const STEPS = [
 ];
 
 export function EmergencyAssistanceForm({ onBack, onViewStatus }: { onBack: () => void; onViewStatus: () => void }) {
-  const { addSos } = useSession();
   const [step, setStep] = useState(0);
   const [people, setPeople] = useState('');
   const [vulnerable, setVulnerable] = useState<string[]>([]);
   const [details, setDetails] = useState('');
   const [sent, setSent] = useState<SosRequest | null>(null);
   const [pin, setPin] = useState<MockPin | null>(null);
-  const saving = !!sent;
   const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+  const saving = !!sent || sending;
   const submitting = useRef(false);
 
   function validate(index: number): string {
@@ -44,13 +46,29 @@ export function EmergencyAssistanceForm({ onBack, onViewStatus }: { onBack: () =
     setError(''); setStep(step + 1);
   }
 
-  function submit() {
+  async function submit() {
     const message = validate(2);
     if (message) { setError(message); return; }
     if (submitting.current || !pin) return;
     submitting.current = true;
+    setSending(true);
     setError('');
-    setSent(addSos({ nature: 'Emergency assistance', peopleCount: Number(people.trim()), details: [details.trim()], vulnerable, priority: 'High', location: pin.address }));
+    try {
+      const counts = {
+        childrens: vulnerable.includes('Children / Infants') ? 1 : 0,
+        elderly: vulnerable.includes('Elderly') ? 1 : 0,
+        pwd: vulnerable.includes('Persons with Disability') ? 1 : 0,
+        adults: Math.max(0, Number(people.trim()) - vulnerable.filter((person) => person !== 'Pregnant').length),
+      };
+      const result = await rescueService.createRescue({
+        address: pin.address,
+        location: { lat: pin.latitude, lng: pin.longitude },
+        ...counts,
+        flood_level: 'no_flooding',
+        medical_assistance: /medical|injur|illness|breath/i.test(details),
+      });
+      setSent({ id: String(result.id), createdAt: result.created_at, nature: 'Emergency assistance', peopleCount: Number(people.trim()), details: [details.trim()], vulnerable, priority: 'High', location: result.address, status: 'Pending' });
+    } catch (cause) { setError(getApiErrorMessage(cause)); submitting.current = false; setSending(false); }
   }
 
   if (sent) return <ReportSuccess title="Help request sent" reference={sent.id} summary={`${people.trim()} people · ${sent.location}`} onBack={onBack} onViewStatus={onViewStatus} />;
@@ -59,7 +77,7 @@ export function EmergencyAssistanceForm({ onBack, onViewStatus }: { onBack: () =
     <Page pageKey={step} edges={['top']} footer={
       <>
         <FormError message={error} />
-        <Action label={step === 2 ? 'Send Emergency Request' : 'Continue'} busy={saving}
+        <Action label={sending ? 'Sending request…' : step === 2 ? 'Send Emergency Request' : 'Continue'} busy={sending}
           onPress={() => { if (step < 2) next(); else void submit(); }} />
       </>
     }>

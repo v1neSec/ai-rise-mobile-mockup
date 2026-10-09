@@ -1,5 +1,5 @@
 import React, { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, appGradient } from './theme';
@@ -22,7 +22,10 @@ export function HomeHeader({ onProfile, onUpdates, role }: { onProfile: () => vo
   return <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
     <ChromeIcon icon="person-outline" label="Open profile" onPress={onProfile} />
     <View style={{ alignItems: 'center', gap: 1 }}>
-      <Text style={{ fontSize: 24, lineHeight: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.8 }}>Agap-AI</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <Image source={require('../../assets/images/agap-ai-logo.png')} accessibilityLabel="Agap-AI logo" resizeMode="contain" style={{ width: 23, height: 27 }} />
+        <Text style={{ fontSize: 24, lineHeight: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.8 }}>Agap-AI</Text>
+      </View>
       <Text style={{ fontSize: 11, lineHeight: 15, color: colors.muted }}>{role} support</Text>
     </View>
     <ChromeIcon icon="notifications-outline" label="Open updates" onPress={onUpdates} />

@@ -9,6 +9,7 @@ export const rescueService = {
 
   createRescue: async (data: RescuePayload | FormData) => {
     const response = await api.post<Rescue>('/rescue/markers/', data);
+    console.log('createRescue response:', response.data);
     return response.data;
   },
 
@@ -43,7 +44,7 @@ export const rescueService = {
   },
 
   completeRescue: async (id: number) => {
-    const response = await api.post<CompletionResponse>(`/rescue/markers/${id}/complete-rescue/`);
+    const response = await api.post<CompletionResponse>(`/rescue/markers/${id}/complete/`);
     return response.data;
   },
 

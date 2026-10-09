@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, useSession } from '../session';
@@ -40,7 +40,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             justifyContent: 'center',
           }}
         >
-          <Ionicons name="pulse" size={38} color={colors.blue} />
+          <Image source={require('../../assets/images/agap-ai-logo.png')} accessibilityLabel="Agap-AI logo" resizeMode="contain" style={{ width: 66, height: 70 }} />
         </View>
 
         <Text style={styles.title}>Agap-AI</Text>

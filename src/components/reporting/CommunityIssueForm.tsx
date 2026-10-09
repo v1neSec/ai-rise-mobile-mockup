@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Text, View } from 'react-native';
 import { Choice, colors, space, styles } from '../UI';
 import { FormAction as Action, FormChoiceGrid as ChoiceGrid, FormField as Field, FormPage as Page, FormUpload as Upload, FormProgress, FormError, formCard, formTheme } from './ReportFormUI';
-import { useSession } from '../../session';
+import { communityReportService } from '../../services/communityReportService';
+import { getApiErrorMessage } from '../../api/api';
+import { appendLocalImage } from '../../services/upload';
 import { MockLocationPin, MockPin } from './MockLocationPin';
 import { ReportSuccess } from './ReportSuccess';
 import { ReportFormHeader } from './ReportFormHeader';
@@ -19,7 +21,6 @@ const CATEGORIES: Choice[] = [
 const STEPS = ['What type of hazard?', 'Describe the issue', 'Where is the issue?', 'Review your report'];
 
 export function CommunityIssueForm({ onBack, onViewStatus }: { onBack: () => void; onViewStatus: () => void }) {
-  const { addReport } = useSession();
   const [step, setStep] = useState(0);
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
@@ -31,6 +32,8 @@ export function CommunityIssueForm({ onBack, onViewStatus }: { onBack: () => voi
   const [progress, setProgress] = useState(0);
   const [suggestion, setSuggestion] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [submittedId, setSubmittedId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const submitted = useRef(false);
 
   useEffect(() => {
@@ -45,19 +48,27 @@ export function CommunityIssueForm({ onBack, onViewStatus }: { onBack: () => voi
     return () => { clearInterval(interval); clearTimeout(timeout); };
   }, [scanning]);
 
-  function next() {
+  async function next() {
     if (!category) { setError('Choose a hazard type.'); return; }
     if (step >= 1 && description.trim().length < 10) { setError('Add a description of at least 10 characters.'); return; }
     if (step >= 2 && !location.trim()) { setError('Choose and confirm your location pin.'); return; }
     setError('');
     if (step < 3) { setStep(step + 1); return; }
-    if (submitted.current) return;
+    if (submitted.current || !pin) return;
     submitted.current = true;
-    setSaved(true);
-    addReport({ category, description: description.trim(), photo, location: location.trim() });
+    setSubmitting(true);
+    try {
+      const categoryMap: Record<string, string> = { 'Road Flooding': 'flood', Landslide: 'landslide', 'Structural Damage': 'structural_damage', 'Stranded Person': 'stranded_person', 'Power Line Down': 'power_line_down', Other: 'other' };
+      const payload = { title: `${category}: ${description.trim()}`.slice(0, 240), description: description.trim(), address: pin.address, barangay: pin.barangayId!, category: categoryMap[category] ?? 'other', relevance: 'RELEVANT' as const, severity: 'MODERATE' as const, flood_level: 'MODERATE' as const };
+      let body: FormData | typeof payload = payload;
+      if (photo) { const form = new FormData(); Object.entries(payload).forEach(([key, value]) => form.append(key, String(value))); appendLocalImage(form, 'image', photo); body = form; }
+      const report = await communityReportService.createReport(body);
+      setSubmittedId(String(report.id)); setSaved(true);
+    } catch (cause) { submitted.current = false; setError(getApiErrorMessage(cause)); }
+    finally { setSubmitting(false); }
   }
 
-  if (saved) return <ReportSuccess title="Report sent" summary={`${category} · ${location}`} onBack={onBack} onViewStatus={onViewStatus} />;
+  if (saved) return <ReportSuccess title="Report sent" reference={submittedId} summary={`${category} · ${location}`} onBack={onBack} onViewStatus={onViewStatus} />;
 
   return (
     <Page pageKey={step} edges={['top']} footer={
@@ -65,11 +76,11 @@ export function CommunityIssueForm({ onBack, onViewStatus }: { onBack: () => voi
         <FormError message={error} />
         {step === 0 && <Action label="Scan with AI" color={colors.blue} secondary
           onPress={() => { setProgress(0); setError(''); setScanning(true); }} />}
-        <Action label={saved ? 'Report saved' : step === 3 ? 'Submit Community Report' : 'Continue'}
-          disabled={saved} onPress={next} />
+        <Action label={submitting ? 'Sending report…' : step === 3 ? 'Submit Community Report' : 'Continue'}
+          disabled={saved || submitting} busy={submitting} onPress={() => { void next(); }} />
       </>
     }>
-      <ReportFormHeader title="Report Community Issue" disabled={saved}
+      <ReportFormHeader title="Report Community Issue" disabled={saved || submitting}
         onBack={() => { if (step > 0) { setStep(step - 1); setError(''); } else onBack(); }} />
       <FormProgress step={step} total={STEPS.length} title={STEPS[step]}
         hint={['Choose the hazard you noticed, or scan with AI.', 'Add a short description and an optional photo.', 'Confirm the pin for the issue location.', 'Check the details before saving your report.'][step]} />

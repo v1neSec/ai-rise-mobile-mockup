@@ -27,8 +27,8 @@ export default function ReportScreen() {
   const back = () => navigation.navigate('Home');
   const viewStatus = () => navigation.navigate('Status');
 
-  if (mode === 'emergency') return <EmergencyAssistanceForm key={route.params?.entry} onBack={back} onViewStatus={viewStatus} />;
-  if (mode === 'supplies') return <SupplyRequestForm key={route.params?.entry} onBack={back} onViewStatus={viewStatus} />;
+  if (session?.role === 'resident' && mode === 'emergency') return <EmergencyAssistanceForm key={route.params?.entry} onBack={back} onViewStatus={viewStatus} />;
+  if (session?.role === 'resident' && mode === 'supplies') return <SupplyRequestForm key={route.params?.entry} onBack={back} onViewStatus={viewStatus} />;
   if (session?.role === 'resident') return <CommunityIssueForm key={route.params?.entry} onBack={back} onViewStatus={viewStatus} />;
 
   return (
@@ -38,10 +38,10 @@ export default function ReportScreen() {
         <Ionicons name="lock-closed-outline" size={32} color={colors.blue} />
         <Text style={styles.section}>Sign in to report</Text>
         <Text style={[styles.subtitle, { textAlign: 'center' }]}>
-          Reports need an account so your barangay can follow up. Emergency assistance is open to everyone.
+          Sign in to securely send this request and track updates from your barangay.
         </Text>
         <View style={{ alignSelf: 'stretch' }}>
-          <Action label="Sign in or register" onPress={() => navigation.navigate('Auth', { role: 'resident', destination: 'Report' })} />
+          <Action label="Sign in or register" onPress={() => navigation.navigate('Auth', { role: 'resident', destination: 'Report', reportMode: mode })} />
         </View>
       </View>
     </Page>

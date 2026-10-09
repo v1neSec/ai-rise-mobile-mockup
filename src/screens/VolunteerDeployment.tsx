@@ -10,6 +10,9 @@ import { SuccessConfirmation } from '../components/SuccessConfirmation';
 import { ScreenHeader } from '../components/AppChrome';
 import { BottomSheet } from '../components/BottomSheet';
 import { InfoRow, PriorityBadge, ProgressStepper, Tag, vt, volunteerCard, VolunteerAction, VolunteerHeader, VolunteerIconButton } from '../components/VolunteerUI';
+import { rescueService } from '../services/rescueService';
+import { supplyService } from '../services/supplyService';
+import { getApiErrorMessage } from '../api/api';
 
 type Nav = BottomTabNavigationProp<VolunteerTabParamList, 'Deployment'>;
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -67,6 +70,7 @@ export default function VolunteerDeployment() {
   const navigation = useNavigation<Nav>();
   const { active, advanceDeployment, finishDeployment, reportIssue } = useSession();
   const [sheet, setSheet] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   /* Empty state */
   if (!active) {
@@ -120,9 +124,15 @@ export default function VolunteerDeployment() {
     }
   }
 
-  function done() {
-    finishDeployment();
-    navigation.navigate('Hub');
+  async function done() {
+    if (completing) return;
+    setCompleting(true);
+    try {
+      if (d.backendId && d.kind === 'rescue') await rescueService.completeRescue(d.backendId);
+      else if (d.backendId && d.kind === 'supply') await supplyService.completeDelivery(d.backendId);
+      finishDeployment(); navigation.navigate('Hub');
+    } catch (cause) { Alert.alert('Could not complete assignment', getApiErrorMessage(cause)); }
+    finally { setCompleting(false); }
   }
 
   function pickIssue(label: string) {
@@ -133,7 +143,7 @@ export default function VolunteerDeployment() {
 
   if (complete) {
     return (
-      <Page edges={['top']} footer={<VolunteerAction label="Done" icon="checkmark-circle-outline" onPress={done} />}>
+      <Page edges={['top']} footer={<VolunteerAction label={completing ? 'Saving completion…' : 'Done'} icon="checkmark-circle-outline" onPress={() => { void done(); }} /> }>
         <SuccessConfirmation title="Deployment complete" message="Thank you for helping your community." />
         <View style={volunteerCard}>
           <Text style={{ color: colors.blue, fontSize: 12, fontWeight: '700' }}>DEPLOYMENT #{d.id}</Text>

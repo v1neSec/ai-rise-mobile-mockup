@@ -1,44 +1,99 @@
-import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import MapView, { Marker, Polygon, type LatLng, type Region } from 'react-native-maps';
+import { dashboardService } from '../../services/dashboardService';
+import type { BarangayGeoJSON } from '../../types/dashboard';
+import type { Coordinates } from '../../types/user';
 import { colors, styles } from '../UI';
-import { FormAction, formCard, formTheme } from './ReportFormUI';
+import { FormAction, formCard } from './ReportFormUI';
 
-export const MOCK_PINS = [
-  { label: 'San Vicente', barangay: 'Barangay San Vicente', address: 'Near San Vicente barangay hall, Apalit', latitude: 14.9533, longitude: 120.7696 },
-  { label: 'San Juan', barangay: 'Barangay San Juan', address: 'Near San Juan covered court, Apalit', latitude: 14.9478, longitude: 120.7589 },
-] as const;
-export type MockPin = (typeof MOCK_PINS)[number];
+const APALIT: Region = { latitude: 14.953, longitude: 120.769, latitudeDelta: 0.07, longitudeDelta: 0.07 };
+export type MockPin = { label: string; barangay: string; barangayId: number | null; address: string; latitude: number; longitude: number };
+type Props = { value: MockPin | null; onChange: (pin: MockPin) => void };
 
-export function MockLocationPin({ value, onChange }: { value: MockPin | null; onChange: (pin: MockPin) => void }) {
-  const [preview, setPreview] = useState<MockPin>(value ?? MOCK_PINS[0]);
-  return (
-    <View style={formCard}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Ionicons name="location-outline" size={20} color={colors.blue} />
-        <Text style={[styles.section, { flex: 1 }]}>Pin location</Text>
-        <Text style={{ color: colors.blue, fontSize: 11, fontWeight: '700' }}>APALIT</Text>
-      </View>
-      <View accessibilityLabel={`Location: ${preview.address}`} style={{ height: 164, borderRadius: 16, backgroundColor: '#EDF3F8', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ position: 'absolute', width: '150%', height: 18, backgroundColor: '#FFFFFF', transform: [{ rotate: '-24deg' }] }} />
-        <View style={{ position: 'absolute', width: 18, height: '160%', backgroundColor: '#FFFFFF', transform: [{ rotate: '18deg' }] }} />
-        <View style={{ position: 'absolute', right: 12, top: 14, width: 56, height: 38, borderRadius: 12, backgroundColor: '#DCE9E8' }} />
-        <View style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: '#2264DF15', alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="location" size={42} color={colors.blue} />
-        </View>
-        <View style={{ position: 'absolute', bottom: 10, backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }}>
-          <Text style={{ color: colors.muted, fontSize: 12 }}>{preview.label} · Apalit</Text>
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {MOCK_PINS.map((pin) => <Pressable key={pin.label} accessibilityRole="radio" accessibilityLabel={`Select ${pin.label} location`} accessibilityState={{ checked: preview.label === pin.label }} onPress={() => setPreview(pin)}
-          style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: preview.label === pin.label ? colors.blue : formTheme.border, backgroundColor: preview.label === pin.label ? formTheme.soft : colors.surface }}>
-          <Text style={{ color: preview.label === pin.label ? colors.blue : colors.muted, textAlign: 'center', fontSize: 13, fontWeight: '600' }}>{pin.label}</Text>
-        </Pressable>)}
-      </View>
-      <FormAction label={value?.label === preview.label ? 'Location pinned ✓' : 'Confirm this location'} secondary onPress={() => onChange(preview)} />
-      {value && <Text accessibilityLiveRegion="polite" style={styles.small}>Pinned: {value.address}</Text>}
-      <Text style={styles.small}>Choose a location and confirm the pin to continue.</Text>
+function toCoordinates(ring: number[][]): LatLng[] {
+  return ring.map(([longitude, latitude]) => ({ latitude, longitude }));
+}
+function containsPoint(point: Coordinates, ring: number[][]) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]; const [xj, yj] = ring[j];
+    if (yi > point.lat !== yj > point.lat && point.lng < ((xj - xi) * (point.lat - yi)) / ((yj - yi) || Number.EPSILON) + xi) inside = !inside;
+  }
+  return inside;
+}
+async function addressAt(point: Coordinates, barangay: string) {
+  try {
+    const [place] = await Location.reverseGeocodeAsync({ latitude: point.lat, longitude: point.lng });
+    const parts = [place?.name, place?.street, place?.district, place?.city].filter(Boolean);
+    return parts.length ? [...new Set(parts)].join(', ') : `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${barangay ? ` · ${barangay}` : ''}`;
+  } catch { return `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${barangay ? ` · ${barangay}` : ''}`; }
+}
+export function MockLocationPin({ value, onChange }: Props) {
+  const mapRef = React.useRef<MapView>(null);
+  const [geojson, setGeojson] = useState<BarangayGeoJSON | null>(null);
+  const [region, setRegion] = useState<Region>(value ? { ...APALIT, latitude: value.latitude, longitude: value.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 } : APALIT);
+  const [point, setPoint] = useState<Coordinates | null>(value ? { lat: value.latitude, lng: value.longitude } : null);
+  const [address, setAddress] = useState(value?.address ?? '');
+  const [barangay, setBarangay] = useState(value?.barangay ?? '');
+  const [barangayId, setBarangayId] = useState<number | null>(value?.barangayId ?? null);
+  const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let alive = true;
+    dashboardService.getBarangayGeoJSON().then((data) => { if (alive) setGeojson(data); })
+      .catch(() => { if (alive) setError('Barangay boundaries are unavailable. You can still pin your location on the map.'); });
+    return () => { alive = false; };
+  }, []);
+  const polygons = useMemo(() => geojson?.features.flatMap((feature) => {
+    const rings = feature.geometry.coordinates;
+    if (!rings?.[0]?.length) return [];
+    return [{ id: feature.properties.id, name: feature.properties.name, color: feature.properties.color, coordinates: toCoordinates(rings[0]), ring: rings[0] }];
+  }) ?? [], [geojson]);
+  async function setPin(next: Coordinates) {
+    setPoint(next);
+    const feature = polygons.find((item) => containsPoint(next, item.ring));
+    const name = feature?.name ?? '';
+    setBarangay(name); setBarangayId(feature?.id ?? null); setLoading(true); setError('');
+    setAddress(await addressAt(next, name)); setLoading(false);
+  }
+  async function locateCurrentPosition() {
+    setLocating(true); setError('');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') throw new Error('Allow location access to pin your current location.');
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const next = { lat: position.coords.latitude, lng: position.coords.longitude };
+      const nextRegion = { ...APALIT, latitude: next.lat, longitude: next.lng, latitudeDelta: 0.012, longitudeDelta: 0.012 };
+      setRegion(nextRegion); mapRef.current?.animateToRegion(nextRegion, 450);
+      await setPin(next);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not get your current location.'); }
+    finally { setLocating(false); }
+  }
+  function confirm() {
+    if (!point) { setError('Tap the map or use your current location to place a pin.'); return; }
+    if (!barangayId) { setError('Choose a point inside an Apalit barangay boundary.'); return; }
+    onChange({ label: barangay, barangay, barangayId, address, latitude: point.lat, longitude: point.lng });
+  }
+  return <View style={formCard}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="location-outline" size={20} color={colors.blue} /><Text style={[styles.section, { flex: 1 }]}>Pin location</Text><Text style={{ color: colors.blue, fontSize: 11, fontWeight: '700' }}>APALIT</Text></View>
+    <View style={{ height: 224, borderRadius: 16, overflow: 'hidden', backgroundColor: '#E8F0F7' }}>
+      <MapView ref={mapRef} style={{ flex: 1 }} initialRegion={region} onPress={(event) => { const { latitude, longitude } = event.nativeEvent.coordinate; void setPin({ lat: latitude, lng: longitude }); }} onRegionChangeComplete={setRegion} showsUserLocation showsMyLocationButton={false} toolbarEnabled={false}>
+        {polygons.map((shape) => <Polygon key={shape.id} coordinates={shape.coordinates} strokeColor={shape.color || colors.blue} fillColor={`${shape.color || colors.blue}22`} strokeWidth={2} />)}
+        {point && <Marker coordinate={{ latitude: point.lat, longitude: point.lng }} title={barangay || 'Selected location'} description={address || 'Confirm this pin'} />}
+      </MapView>
+      <Pressable accessibilityRole="button" accessibilityLabel="Use my current location" onPress={() => void locateCurrentPosition()} style={{ position: 'absolute', right: 10, top: 10, backgroundColor: '#FFFFFF', borderRadius: 22, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }}>
+        {locating ? <ActivityIndicator color={colors.blue} /> : <Ionicons name="locate-outline" size={22} color={colors.blue} />}
+      </Pressable>
+      {!geojson && <View pointerEvents="none" style={{ position: 'absolute', left: 12, bottom: 12, backgroundColor: '#FFFFFFE8', padding: 8, borderRadius: 10 }}><Text style={styles.small}>Loading barangay boundaries…</Text></View>}
     </View>
-  );
+    <Text style={styles.subtitle}>{loading ? 'Finding address…' : address || 'Tap inside an Apalit barangay or use your current location.'}</Text>
+    {!!barangay && <Text style={styles.small}>{barangay} · {point?.lat.toFixed(5)}, {point?.lng.toFixed(5)}</Text>}
+    {!!error && <Text accessibilityLiveRegion="polite" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text>}
+    <FormAction label={value && value.latitude === point?.lat && value.longitude === point?.lng ? 'Location pinned ✓' : 'Confirm this location'} secondary onPress={confirm} />
+    <Text style={styles.small}>{value ? `Pinned: ${value.address}` : 'The pin must be inside an Apalit barangay.'}</Text>
+  </View>;
 }
